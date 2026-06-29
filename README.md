@@ -27,15 +27,6 @@
 
 ---
 
-```bash
-git clone https://github.com/LynxZizzle/Odysseus-Overhaul/odysseus.git
-cd odysseus
-cp .env.example .env
-docker compose up -d --build
-```
-
-Open `http://localhost:7000` when the containers are healthy. The first admin password is printed in `docker compose logs odysseus`.
-
 ## License
 
 AGPL-3.0-or-later -- see [LICENSE](LICENSE) and [ACKNOWLEDGMENTS.md](ACKNOWLEDGMENTS.md).
