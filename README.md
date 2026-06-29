@@ -3,7 +3,10 @@
 </p>
 
 <p align="center">
-  A self-hosted AI workspace for chat, agents, research, documents, email, notes, calendar, and local model workflows.
+  A self-hosted AI workspace from pewdiepie, This Overhaul Adds
+  - Media Embedding Overhaul So You Can Preview Video/Audio/Images When Embeded
+  - Tools Overhaul So You Can Properly Disable Built-In Odysseus MCP Tools And Properly Disable Web_Fetch And Web_Search
+  - Electron App + A Browser To Prevent AI Confusion When Using MCP Tools (Like AnythingLLM)
 </p>
 
 <p align="center">
