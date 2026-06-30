@@ -39,6 +39,8 @@ powershell -ExecutionPolicy Bypass -File .\launch-windows.ps1
 
 Electron Setup
 ```bash
+Go To Windows Settings And Enable Developer Mode
+Install Node.JS
 cd odysseus\Electron
 npm run build
 Move All Files From Electron\dist\win-unpacked Into Odysseus
