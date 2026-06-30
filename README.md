@@ -30,6 +30,9 @@
 
 ## Quick Start
 
+Follow The Original Odysseus Setup
+
+Electron Setup
 ```bash
 cd odysseus\Electron
 npm run build
