@@ -541,8 +541,11 @@ class McpManager:
         schemas = []
         for server_id, tools in self._tools.items():
             # Skip builtin Python servers — they use the code-block tool format
-            # But include NPX-based builtins (like browser) which need function calling
-            if self.is_builtin(server_id) and server_id != "builtin_browser":
+            # But include NPX-based builtins (like browser) which need function calling.
+            # browser_tool is a Python builtin but ALSO needs function-calling
+            # (browse_open/browse_click/etc. are called via MCP tool schemas,
+            # not the code-block format), so it's excluded from the skip too.
+            if self.is_builtin(server_id) and server_id not in ("builtin_browser", "browser_tool"):
                 continue
             conn = self._connections.get(server_id, {})
             server_name = conn.get("name", server_id)
@@ -610,6 +613,7 @@ class McpManager:
             "memory",
             "rag",
             "email",
+            "browser_tool",
         }
 
     def get_server_status(self, server_id: str) -> Dict:
@@ -640,8 +644,9 @@ class McpManager:
         by_server = {}
         for t in tools:
             # Skip builtin Python servers — they're already in the agent prompt
-            # But include NPX-based builtins (like browser) which aren't hardcoded
-            if self.is_builtin(t["server_id"]) and t["server_id"] != "builtin_browser":
+            # But include NPX-based builtins (like browser) which aren't hardcoded,
+            # and browser_tool, which needs the same function-calling treatment.
+            if self.is_builtin(t["server_id"]) and t["server_id"] not in ("builtin_browser", "browser_tool"):
                 continue
             if t.get("is_disabled"):
                 continue
