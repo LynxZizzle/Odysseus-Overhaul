@@ -28,6 +28,16 @@
 
 ---
 
+## Quick Start
+
+```bash
+cd odysseus\Electron
+npm run build
+Move All Files From Electron\dist\win-unpacked Into Odysseus
+```
+
+---
+
 ## License
 
 AGPL-3.0-or-later -- see [LICENSE](LICENSE) and [ACKNOWLEDGMENTS.md](ACKNOWLEDGMENTS.md).
