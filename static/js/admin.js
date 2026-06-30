@@ -1776,6 +1776,53 @@ const MCP_PRESETS = [
     help: "Replace the connection string in the Args field with your actual Postgres connection URL." },
   { name: "Todoist",         command: "npx", args: ["-y", "todoist-mcp-server"],                         env: { TODOIST_API_TOKEN: "" },
     help: "1. Go to todoist.com > Settings > Integrations > Developer\n2. Copy your API token" },
+
+  // ODY_MCP_PRESETS_V1 — additional MCP server presets
+  { name: "GitLab",            command: "npx", args: ["-y", "@modelcontextprotocol/server-gitlab"],
+    env: { GITLAB_PERSONAL_ACCESS_TOKEN: "", GITLAB_API_URL: "" },
+    help: "1. Go to gitlab.com/-/profile/personal_access_tokens\n2. Create token with api scope\n3. Paste as Gitlab Personal Access Token\n4. API URL defaults to https://gitlab.com/api/v4" },
+  { name: "Google Maps",       command: "npx", args: ["-y", "@modelcontextprotocol/server-google-maps"],
+    env: { GOOGLE_MAPS_API_KEY: "" },
+    help: "1. Go to console.cloud.google.com\n2. Enable Maps JavaScript API\n3. APIs & Services > Credentials > Create API Key\n4. Paste as Google Maps Api Key" },
+  { name: "MySQL",             command: "npx", args: ["-y", "mysql-mcp-server"],
+    env: { MYSQL_HOST: "", MYSQL_USER: "", MYSQL_PASS: "", MYSQL_DB: "" },
+    help: "Fill in your MySQL connection details." },
+  { name: "MSSQL",             command: "npx", args: ["-y", "@automatalabs/mcp-server-mssql"],
+    env: { MSSQL_HOST: "", MSSQL_PORT: "1433", MSSQL_USER: "", MSSQL_PASSWORD: "", MSSQL_DATABASE: "" },
+    help: "Fill in your SQL Server connection details." },
+  { name: "Jira",              command: "npx", args: ["-y", "mcp-server-jira"],
+    env: { JIRA_API_TOKEN: "", JIRA_BASE_URL: "", JIRA_USER_EMAIL: "" },
+    help: "1. Go to id.atlassian.com/manage-profile/security/api-tokens\n2. Create API token\n3. Enter your Jira base URL (e.g. https://yourorg.atlassian.net)\n4. Enter the email associated with your Jira account" },
+  { name: "Confluence",        command: "npx", args: ["-y", "mcp-confluence"],
+    env: { CONFLUENCE_API_TOKEN: "", CONFLUENCE_BASE_URL: "", CONFLUENCE_USER_EMAIL: "" },
+    help: "1. Go to id.atlassian.com/manage-profile/security/api-tokens\n2. Create API token\n3. Enter your Confluence base URL\n4. Enter the email associated with your Confluence account" },
+  { name: "Airtable",          command: "npx", args: ["-y", "@dotyourbrain/airtable-mcp"],
+    env: { AIRTABLE_API_KEY: "" },
+    help: "1. Go to airtable.com/create/tokens\n2. Create a personal access token with data.records:read and data.records:write scopes\n3. Paste as Airtable Api Key" },
+  { name: "Exa Search",        command: "npx", args: ["-y", "exa-mcp-server"],
+    env: { EXA_API_KEY: "" },
+    help: "1. Go to exa.ai\n2. Sign up and get API key from dashboard\n3. Paste as Exa Api Key" },
+  { name: "Tavily Search",     command: "npx", args: ["-y", "tavily-mcp"],
+    env: { TAVILY_API_KEY: "" },
+    help: "1. Go to tavily.com\n2. Sign up and get API key\n3. Paste as Tavily Api Key" },
+  { name: "Cloudflare",        command: "npx", args: ["-y", "@cloudflare/mcp-server-cloudflare"],
+    env: {},
+    help: "Requires a Cloudflare account. Authenticate via browser on first run." },
+  { name: "AWS KB Retrieval",  command: "npx", args: ["-y", "@modelcontextprotocol/server-aws-kb-retrieval"],
+    env: { AWS_ACCESS_KEY_ID: "", AWS_SECRET_ACCESS_KEY: "", AWS_REGION: "" },
+    help: "1. Go to AWS IAM console\n2. Create or use an existing user with Bedrock permissions\n3. Generate access keys\n4. Fill in the AWS credentials" },
+  { name: "Puppeteer",         command: "npx", args: ["-y", "@modelcontextprotocol/server-puppeteer"],
+    env: {},
+    help: "Headless browser automation via Puppeteer. No configuration needed." },
+  { name: "Sequential Thinking", command: "npx", args: ["-y", "@modelcontextprotocol/server-sequential-thinking"],
+    env: {},
+    help: "Enables structured chain-of-thought reasoning. No configuration needed." },
+  { name: "Fetch",             command: "npx", args: ["-y", "@modelcontextprotocol/server-fetch"],
+    env: {},
+    help: "Fetch any URL and return its content. No configuration needed." },
+  { name: "Time",              command: "npx", args: ["-y", "@modelcontextprotocol/server-time"],
+    env: {},
+    help: "Get current time and timezone information. No configuration needed." },
 ];
 // ── Built-in tools management ──
 const TOOL_META = {
@@ -1971,20 +2018,50 @@ async function loadMcpServers() {
     list.querySelectorAll('[data-adm-mcp-reconnect]').forEach(btn => {
       btn.addEventListener('click', async () => {
         const msg = el('adm-mcpMsg'); msg.textContent = 'Reconnecting...'; msg.className = '';
+        btn.disabled = true;
         try {
           const res = await fetch(`/api/mcp/servers/${btn.dataset.admMcpReconnect}/reconnect`, { method: 'POST', credentials: 'same-origin' });
           const data = await res.json();
-          msg.textContent = data.connected ? `Reconnected (${data.tool_count} tools)` : `Failed: ${data.error || 'unknown'}`;
-          msg.className = data.connected ? 'admin-success' : 'admin-error';
-          loadMcpServers();
+          if (!res.ok) {
+            msg.textContent = `Failed: ${data.detail || data.error || 'unknown error'}`;
+            msg.className = 'admin-error';
+          } else {
+            msg.textContent = data.connected ? `Reconnected (${data.tool_count} tools)` : `Failed: ${data.error || 'unknown'}`;
+            msg.className = data.connected ? 'admin-success' : 'admin-error';
+          }
         } catch (e) { msg.textContent = 'Failed: ' + e.message; msg.className = 'admin-error'; }
+        finally { btn.disabled = false; }
+        await loadMcpServers();
       });
     });
     list.querySelectorAll('[data-adm-mcp-toggle]').forEach(btn => {
       btn.addEventListener('click', async () => {
-        const fd = new FormData(); fd.append('is_enabled', btn.dataset.admMcpEnable);
-        await fetch(`/api/mcp/servers/${btn.dataset.admMcpToggle}`, { method: 'PATCH', body: fd, credentials: 'same-origin' });
-        loadMcpServers();
+        const msg = el('adm-mcpMsg');
+        btn.disabled = true;
+        const originalText = btn.textContent;
+        btn.textContent = btn.dataset.admMcpEnable === 'true' ? 'Enabling...' : 'Disabling...';
+        try {
+          const fd = new FormData(); fd.append('is_enabled', btn.dataset.admMcpEnable);
+          const res = await fetch(`/api/mcp/servers/${btn.dataset.admMcpToggle}`, { method: 'PATCH', body: fd, credentials: 'same-origin' });
+          const data = await res.json();
+          if (!res.ok) {
+            if (msg) { msg.textContent = `Failed: ${data.detail || data.error || 'unknown error'}`; msg.className = 'admin-error'; }
+          } else if (data.is_enabled && !data.connected) {
+            // Enabled in DB but the actual connection attempt failed —
+            // this is the case that used to look like "nothing happened".
+            if (msg) { msg.textContent = `Enabled but failed to connect: ${data.error || 'unknown error'}`; msg.className = 'admin-error'; }
+          } else if (msg) {
+            msg.textContent = data.is_enabled ? `Connected (${data.tool_count || 0} tools)` : 'Disabled';
+            msg.className = 'admin-success';
+          }
+        } catch (e) {
+          if (msg) { msg.textContent = 'Failed: ' + e.message; msg.className = 'admin-error'; }
+          btn.textContent = originalText;
+        } finally {
+          btn.disabled = false;
+        }
+        // Always refresh from the server's actual state, not an assumed one
+        await loadMcpServers();
       });
     });
     list.querySelectorAll('[data-adm-mcp-delete]').forEach(btn => {
@@ -2060,12 +2137,17 @@ async function _saveMcpToolState(serverId, panel) {
   });
   const total = panel.querySelectorAll('input[type=checkbox]').length;
   try {
-    await fetch(`/api/mcp/servers/${serverId}/tools`, {
+    const res = await fetch(`/api/mcp/servers/${serverId}/tools`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       credentials: 'same-origin',
       body: JSON.stringify({ disabled }),
     });
+    if (!res.ok) {
+      const msg = el('adm-mcpMsg');
+      if (msg) { msg.textContent = 'Failed to save tool selection'; msg.className = 'admin-error'; }
+      return;
+    }
     // Update the count label in the panel
     const countLabel = panel.querySelector('.mcp-tools-count');
     if (countLabel) countLabel.textContent = `${total - disabled.length}/${total} enabled`;
@@ -2075,7 +2157,10 @@ async function _saveMcpToolState(serverId, panel) {
       const badge = row.querySelector('.admin-badge');
       if (badge) badge.textContent = `Connected (${total - disabled.length}/${total} tools enabled)`;
     }
-  } catch (e) { /* silent */ }
+  } catch (e) {
+    const msg = el('adm-mcpMsg');
+    if (msg) { msg.textContent = 'Failed to save tool selection: ' + e.message; msg.className = 'admin-error'; }
+  }
 }
 
 function initMcpForm() {
@@ -3040,6 +3125,7 @@ function refreshAll() {
   loadUsers();
   loadEndpoints();
   loadBuiltinTools();
+  _loadBuiltinMcpTools(0); // ODY_COMBINED_V1
   loadMcpServers();
   loadTokens();
   loadLogs(false);
@@ -3064,4 +3150,357 @@ export function close() {
 }
 
 const adminModule = { open, close, _initData, get _initialized() { return initialized; } };
+
+
+// ODY_BROWSER_BTN_V1 — Browser Tool button handlers
+(function() {
+  var _API = 'http://127.0.0.1:7002';
+
+  async function _apiFetch(Endpoint, Body) {
+    var Res = await fetch(_API + Endpoint, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(Body || {}),
+    });
+    return Res;
+  }
+
+  function _setStatus(Msg, IsError) {
+    var Status = document.getElementById('ody-browser-status');
+    if (!Status) return;
+    Status.textContent = Msg;
+    Status.style.color = IsError ? 'var(--red, #f87171)' : 'var(--fg, inherit)';
+    Status.style.opacity = '0.75';
+    if (Msg) setTimeout(function() {
+      if (Status.textContent === Msg) { Status.textContent = ''; }
+    }, 5000);
+  }
+
+  function _wireBrowserBtns() {
+    var OpenBtn   = document.getElementById('ody-open-browser-btn');
+    var ClearBtn  = document.getElementById('ody-clear-browser-btn');
+    var StatusBtn = document.getElementById('ody-browser-status-btn');
+    if (!OpenBtn || OpenBtn._odyWired) return;
+    OpenBtn._odyWired = true;
+
+    OpenBtn.addEventListener('click', async function() {
+      OpenBtn.disabled = true;
+      _setStatus('Opening browser...');
+      try {
+        var Res = await _apiFetch('/open', {});
+        if (Res.ok) {
+          _setStatus('Browser opened. Log into any sites, then close the window.');
+        } else {
+          _setStatus('Failed to open browser (HTTP ' + Res.status + '). Restart Odysseus.', true);
+        }
+      } catch (E) {
+        _setStatus('Cannot reach browser API (port 7002). Is Odysseus running?', true);
+      } finally {
+        OpenBtn.disabled = false;
+      }
+    });
+
+    if (ClearBtn) {
+      ClearBtn.addEventListener('click', async function() {
+        ClearBtn.disabled = true;
+        _setStatus('Clearing session data...');
+        try {
+          var Res = await _apiFetch('/clear-session', {});
+          _setStatus(Res.ok ? 'Session data cleared.' : 'Failed to clear session.', !Res.ok);
+        } catch (E) {
+          _setStatus('Cannot reach browser API.', true);
+        } finally {
+          ClearBtn.disabled = false;
+        }
+      });
+    }
+
+    if (StatusBtn) {
+      StatusBtn.addEventListener('click', async function() {
+        StatusBtn.disabled = true;
+        try {
+          var Res = await fetch(_API + '/status', { method: 'GET' });
+          if (Res.ok) {
+            var Data = await Res.json();
+            _setStatus('Browser API online. ' + (Data.session ? 'Session active.' : 'No active session.'));
+          } else {
+            _setStatus('API returned HTTP ' + Res.status, true);
+          }
+        } catch (E) {
+          _setStatus('Browser API offline (port 7002 not responding).', true);
+        } finally {
+          StatusBtn.disabled = false;
+        }
+      });
+    }
+  }
+
+  // Wire on integrations tab open (panel renders lazily)
+  document.addEventListener('click', function(E) {
+    if (E.target.closest('[data-settings-tab="integrations"]')) {
+      setTimeout(_wireBrowserBtns, 200);
+    }
+  });
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', function() { setTimeout(_wireBrowserBtns, 500); });
+  } else {
+    setTimeout(_wireBrowserBtns, 500);
+  }
+})();
+
+
+// ODY_COMBINED_V1 _loadBuiltinMcpTools
+async function _loadBuiltinMcpTools(isRetry) {
+  var _MCP_TOOL_META = {
+    'browser_take_screenshot': { ctx: '~260k', desc: 'Capture screenshot. WARNING ~260k tokens. Needs vision + >=32k context. Disable for models <=13B.' },
+    'browser_snapshot': { ctx: '~8k', desc: 'Accessibility tree of page. Disable for models <=9B.' },
+    'browser_navigate': { ctx: '~100', desc: 'Navigate to a URL.' },
+    'browser_navigate_back': { ctx: '~100', desc: 'Go back in browser history.' },
+    'browser_click': { ctx: '~100', desc: 'Click an element.' },
+    'browser_type': { ctx: '~100', desc: 'Type text into a field.' },
+    'browser_fill': { ctx: '~100', desc: 'Fill a form field.' },
+    'browser_fill_form': { ctx: '~100', desc: 'Fill multiple form fields at once.' },
+    'browser_select_option': { ctx: '~100', desc: 'Select a dropdown option.' },
+    'browser_hover': { ctx: '~100', desc: 'Hover over an element.' },
+    'browser_drag': { ctx: '~100', desc: 'Drag and drop between elements.' },
+    'browser_scroll': { ctx: '~100', desc: 'Scroll the page.' },
+    'browser_mouse_move_xy': { ctx: '~100', desc: 'Move mouse to coordinates.' },
+    'browser_mouse_click_xy': { ctx: '~100', desc: 'Click at coordinates.' },
+    'browser_mouse_drag_xy': { ctx: '~100', desc: 'Drag mouse.' },
+    'browser_mouse_down': { ctx: '~50', desc: 'Press mouse button.' },
+    'browser_mouse_up': { ctx: '~50', desc: 'Release mouse button.' },
+    'browser_mouse_wheel': { ctx: '~50', desc: 'Scroll via mouse wheel.' },
+    'browser_press_key': { ctx: '~50', desc: 'Press a keyboard key.' },
+    'browser_evaluate': { ctx: '~500', desc: 'Evaluate JavaScript in the browser.' },
+    'browser_run_code_unsafe': { ctx: '~500', desc: 'Run Playwright code (RCE-equivalent).' },
+    'browser_file_upload': { ctx: '~100', desc: 'Upload files via browser.' },
+    'browser_drop': { ctx: '~100', desc: 'Drop files onto an element.' },
+    'browser_console_messages': { ctx: '~500', desc: 'Get browser console messages.' },
+    'browser_network_requests': { ctx: '~1k', desc: 'List network requests.' },
+    'browser_network_request': { ctx: '~1k', desc: 'Get details of a single network request.' },
+    'browser_handle_dialog': { ctx: '~100', desc: 'Handle a browser dialog.' },
+    'browser_resume': { ctx: '~100', desc: 'Resume paused script execution.' },
+    'browser_resize': { ctx: '~50', desc: 'Resize the browser window.' },
+    'browser_highlight': { ctx: '~50', desc: 'Highlight an element.' },
+    'browser_hide_highlight': { ctx: '~50', desc: 'Remove a highlight overlay.' },
+    'browser_annotate': { ctx: '~100', desc: 'Open Playwright Dashboard in annotation mode.' },
+    'browser_tabs': { ctx: '~100', desc: 'Manage browser tabs.' },
+    'browser_wait_for': { ctx: '~100', desc: 'Wait for a selector or network event.' },
+    'browser_start_tracing': { ctx: '~50', desc: 'Start trace recording.' },
+    'browser_stop_tracing': { ctx: '~200', desc: 'Stop trace recording.' },
+    'browser_start_video': { ctx: '~50', desc: 'Start video recording.' },
+    'browser_stop_video': { ctx: '~200', desc: 'Stop video recording.' },
+    'browser_video_chapter': { ctx: '~50', desc: 'Add chapter marker to video.' },
+    'browser_video_show_actions': { ctx: '~50', desc: 'Annotate actions on video.' },
+    'browser_video_hide_actions': { ctx: '~50', desc: 'Stop annotating actions on video.' },
+    'browser_close': { ctx: '~50', desc: 'Close the browser tab.' },
+    'scrape_post_media': { ctx: '~500', desc: 'Scrape a page for embedded video/image URLs.' },
+    'manage_memory': { ctx: '~300', desc: 'List, add, edit, delete or search persistent memory.' },
+    'manage_rag': { ctx: '~200', desc: 'List, add or remove RAG indexed directories.' },
+    'generate_image': { ctx: '~200', desc: 'Generate an image via the configured image model.' },
+    'list_email_accounts': { ctx: '~100', desc: 'List configured email accounts.' },
+    'list_emails': { ctx: '~1k', desc: 'List emails from the inbox.' },
+    'read_email': { ctx: '~2k', desc: 'Read the full content of an email.' },
+    'reply_to_email': { ctx: '~300', desc: 'Reply to an email.' },
+    'send_email': { ctx: '~300', desc: 'Send an email via SMTP.' },
+    'delete_email': { ctx: '~100', desc: 'Delete an email.' },
+    'search_emails': { ctx: '~500', desc: 'Search emails by query.' },
+    'mark_email_read': { ctx: '~100', desc: 'Mark an email as read.' },
+    'archive_email': { ctx: '~100', desc: 'Archive an email.' },
+    'bulk_email': { ctx: '~500', desc: 'Perform bulk email actions.' },
+  };
+
+  var _SERVER_LABELS = {
+    builtin_browser: 'Browser (Playwright)',
+    memory:          'Memory',
+    rag:             'Knowledge / RAG',
+    image_gen:       'Image Generation',
+    email:           'Email',
+  };
+  var _SERVER_ORDER = ['builtin_browser','memory','rag','image_gen','email'];
+
+  // Remove ALL existing MCP cards before re-rendering (prevents duplicates)
+  document.querySelectorAll('#adm-builtin-mcp-card').forEach(function(el){el.remove();});
+
+  var data;
+  try {
+    var res = await fetch('/api/mcp/builtin-tools', { credentials: 'same-origin' });
+    if (!res.ok) return;
+    data = await res.json();
+  } catch (e) { return; }
+  if (!Array.isArray(data) || !data.length) return;
+
+  var byServer = {};
+  data.forEach(function(t) {
+    if (!byServer[t.server_id]) byServer[t.server_id] = [];
+    byServer[t.server_id].push(t);
+  });
+
+  // If Browser MCP not yet connected, retry up to 5x at 3s intervals
+  if (!byServer['builtin_browser'] && (isRetry || 0) < 5) {
+    var _next = (isRetry || 0) + 1;
+    setTimeout(function() { _loadBuiltinMcpTools(_next); }, 3000);
+  }
+
+  var serverIds = Object.keys(byServer).sort(function(a, b) {
+    var ai = _SERVER_ORDER.indexOf(a), bi = _SERVER_ORDER.indexOf(b);
+    return (ai < 0 ? 99 : ai) - (bi < 0 ? 99 : bi);
+  });
+  if (!serverIds.length) return;
+
+  var card = document.createElement('div');
+  card.id = 'adm-builtin-mcp-card';
+  card.className = 'admin-card';
+  card.style.marginTop = '12px';
+  card.innerHTML = '<h2>Built-in MCP Tools</h2>'
+    + '<div class="admin-toggle-sub" style="margin-bottom:8px">'
+    + 'Toggle tools from built-in MCP servers. Changes apply on next chat.</div>';
+
+  var listEl = document.createElement('div');
+  listEl.className = 'admin-user-list';
+  card.appendChild(listEl);
+
+  async function _saveBuiltinMcp(serverId, bodyEl, headerEl) {
+    var checks = bodyEl.querySelectorAll('input[data-mcp-tool-name]');
+    var disabled = [];
+    checks.forEach(function(c) { if (!c.checked) disabled.push(c.dataset.mcpToolName); });
+    try {
+      await fetch('/api/mcp/builtin-tools', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'same-origin',
+        body: JSON.stringify({ server_id: serverId, disabled: disabled }),
+      });
+    } catch (e) { console.warn('[mcp-patch] save failed:', e); }
+    var enabled = Array.from(checks).filter(function(c) { return c.checked; }).length;
+    var counter = headerEl.querySelector('.admin-tool-cat-count');
+    if (counter) counter.textContent = enabled + '/' + checks.length;
+    var master = headerEl.querySelector('input[data-mcp-cat-toggle]');
+    if (master) master.checked = (enabled === checks.length);
+  }
+
+  serverIds.forEach(function(sid) {
+    var tools = byServer[sid];
+    var label = _SERVER_LABELS[sid] || sid;
+    var enabledCount = tools.filter(function(t) { return !t.is_disabled; }).length;
+    var total = tools.length;
+    var catBodyId = 'mcp-cat-' + sid.replace(/[^a-zA-Z0-9]/g, '');
+
+    var catEl = document.createElement('div');
+    catEl.className = 'admin-tool-category';
+
+    var headerEl = document.createElement('div');
+    headerEl.className = 'admin-tool-cat-header';
+    headerEl.setAttribute('data-tool-cat', catBodyId);
+    headerEl.style.cssText = 'cursor:pointer;display:flex;align-items:center;justify-content:space-between;';
+    headerEl.innerHTML =
+      '<span>' + label + '</span>'
+      + '<span style="display:flex;align-items:center;gap:6px;" class="admin-tool-cat-right">'
+      + '<span class="admin-tool-cat-count" style="font-size:10px;opacity:0.5;">'
+        + enabledCount + '/' + total + '</span>'
+      + '<label class="admin-switch" style="flex-shrink:0;">'
+        + '<input type="checkbox" data-mcp-cat-toggle="' + sid + '" '
+          + (enabledCount === total ? 'checked' : '') + '>'
+        + '<span class="admin-slider"></span></label>'
+      + '<svg class="admin-tool-cat-chevron" width="12" height="12" viewBox="0 0 24 24"'
+        + ' fill="none" stroke="currentColor" stroke-width="2.5"'
+        + ' stroke-linecap="round" stroke-linejoin="round"'
+        + ' style="opacity:0.3;transition:transform 0.2s,opacity 0.2s;">'
+        + '<polyline points="6 9 12 15 18 9"/></svg>'
+      + '</span>';
+    catEl.appendChild(headerEl);
+
+    var bodyEl = document.createElement('div');
+    bodyEl.className = 'admin-tool-cat-body hidden';
+    bodyEl.id = catBodyId;
+    tools.forEach(function(t) {
+      var meta = _MCP_TOOL_META[t.name] || { ctx: '?', desc: (t.description || '').slice(0,80) };
+      var row = document.createElement('div');
+      row.className = 'admin-tool-row';
+      row.innerHTML =
+        '<div class="admin-tool-info">'
+          + '<span class="admin-tool-name">' + t.name + '</span>'
+          + '<span class="admin-tool-desc">' + meta.desc.slice(0,120) + '</span>'
+        + '</div>'
+        + '<span class="admin-tool-ctx" title="Approximate context tokens">' + meta.ctx + '</span>'
+        + '<label class="admin-switch" style="flex-shrink:0;">'
+          + '<input type="checkbox" data-mcp-tool-name="' + t.name + '" '
+            + (!t.is_disabled ? 'checked' : '') + '>'
+          + '<span class="admin-slider"></span></label>';
+      bodyEl.appendChild(row);
+    });
+    catEl.appendChild(bodyEl);
+
+    headerEl.querySelector('.admin-tool-cat-right').addEventListener('click', function(e) {
+      e.stopPropagation();
+    });
+    headerEl.addEventListener('click', function() {
+      bodyEl.classList.toggle('hidden');
+      var chevron = headerEl.querySelector('.admin-tool-cat-chevron');
+      var isOpen = !bodyEl.classList.contains('hidden');
+      if (chevron) {
+        chevron.style.transform = isOpen ? 'rotate(180deg)' : '';
+        chevron.style.opacity  = isOpen ? '0.7' : '0.3';
+      }
+    });
+    bodyEl.querySelectorAll('input[data-mcp-tool-name]').forEach(function(chk) {
+      chk.addEventListener('change', function() {
+        _saveBuiltinMcp(sid, bodyEl, headerEl);
+      });
+    });
+    var masterChk = headerEl.querySelector('input[data-mcp-cat-toggle]');
+    if (masterChk) {
+      masterChk.addEventListener('change', function() {
+        bodyEl.querySelectorAll('input[data-mcp-tool-name]').forEach(function(c) {
+          c.checked = masterChk.checked;
+        });
+        _saveBuiltinMcp(sid, bodyEl, headerEl);
+      });
+    }
+    listEl.appendChild(catEl);
+  });
+
+  // Remove all old cards again right before insert (belt and suspenders)
+  document.querySelectorAll('#adm-builtin-mcp-card').forEach(function(el){el.remove();});
+  var nativeList = document.getElementById('adm-builtin-tools-list');
+  var nativeCard = nativeList ? nativeList.closest('.admin-card') : null;
+  if (nativeCard && nativeCard.parentNode) {
+    nativeCard.parentNode.insertBefore(card, nativeCard.nextSibling);
+  } else {
+    var panel = document.querySelector('[data-settings-panel="tools"]');
+    if (panel) panel.appendChild(card);
+  }
+}
+// ODY_COMBINED_V1 end _loadBuiltinMcpTools
+
+
+// ODY_COMBINED_V1 wire #tool-agenttools-btn
+(function() {
+  function _wire() {
+    var btn = document.getElementById('tool-agenttools-btn');
+    if (!btn || btn._wired) return;
+    btn._wired = true;
+    btn.addEventListener('click', function() {
+      var sb = document.getElementById('sidebar');
+      var bd = document.getElementById('sidebar-backdrop');
+      if (sb && window.innerWidth < 768) {
+        sb.classList.add('hidden');
+        if (bd) bd.classList.remove('visible');
+      }
+      if (window.adminModule && typeof window.adminModule.open === 'function') {
+        window.adminModule.open('tools');
+      } else {
+        var g = document.getElementById('user-bar-settings');
+        if (g) g.click();
+        setTimeout(function() {
+          var t = document.querySelector('[data-settings-tab="tools"]');
+          if (t) t.click();
+        }, 150);
+      }
+    });
+  }
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', function() { setTimeout(_wire, 300); });
+  } else { setTimeout(_wire, 300); }
+})();
 export default adminModule;
