@@ -56,71 +56,118 @@ def require_admin(request: Request):
         raise HTTPException(403, "Admin only")
 
 
-class SecurityHeadersMiddleware(BaseHTTPMiddleware):
-    """Add standard security headers to all responses."""
+class SecurityHeadersMiddleware:
+    """Add standard security headers to all responses.
 
-    async def dispatch(self, request: Request, call_next) -> Response:
-        # Generate a per-request nonce for inline scripts
+    Pure ASGI middleware (not BaseHTTPMiddleware) so it never buffers or
+    re-wraps the response body. BaseHTTPMiddleware reads the entire downstream
+    response into memory and re-emits it as a new ASGI message sequence; when
+    GZipMiddleware is anywhere in the stack, this re-wrapping can desync the
+    Content-Length the client receives from the body actually streamed,
+    producing a 200 OK with the correct (compressed) Content-Length but a
+    truncated or empty body -- regardless of which order the two middlewares
+    are added in. Operating at the ASGI message level avoids this entirely:
+    headers are injected into the single `http.response.start` message before
+    any body bytes flow, so GZipMiddleware (whichever layer it's in) always
+    sees and compresses the real, complete body.
+    """
+
+    def __init__(self, app):
+        self.app = app
+
+    async def __call__(self, scope, receive, send):
+        if scope["type"] != "http":
+            await self.app(scope, receive, send)
+            return
+
+        path = scope.get("path", "") or ""
         nonce = secrets.token_hex(16)
-        request.state.csp_nonce = nonce
 
-        response = await call_next(request)
-        path = request.url.path
+        # Stash the nonce somewhere route handlers can still read it the way
+        # they used to via request.state.csp_nonce. ASGI scope["state"] is the
+        # equivalent extension point Starlette/FastAPI request.state reads from.
+        scope.setdefault("state", {})["csp_nonce"] = nonce
 
-        # Tool render endpoints
         is_tool_render = path.startswith("/api/tools/") and path.endswith("/render")
-        # Document library PDF preview endpoint
         is_document_pdf_preview = path.startswith("/api/document/") and path.endswith("/render-pdf")
-        # Visual report pages are self-contained HTML — need inline scripts + external images
         is_report = path.startswith("/api/research/report/")
 
-        response.headers["X-Content-Type-Options"] = "nosniff"
-        response.headers["Referrer-Policy"] = "no-referrer"
-        response.headers["Permissions-Policy"] = "camera=(), microphone=(self), geolocation=()"
-
+        # Scheme/forwarded-proto check needs the request headers, which are
+        # available directly off the ASGI scope without needing a Request object.
+        raw_headers = scope.get("headers") or []
+        header_map = {k.decode("latin-1").lower(): v.decode("latin-1") for k, v in raw_headers}
         is_https = (
-            request.url.scheme == "https"
-            or request.headers.get("X-Forwarded-Proto") == "https"
+            scope.get("scheme") == "https"
+            or header_map.get("x-forwarded-proto") == "https"
         )
-        if is_https:
-            response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
 
-        if is_report:
-            response.headers["Content-Security-Policy"] = (
-                "default-src 'self'; "
-                "script-src 'self' 'unsafe-inline'; "
-                "style-src 'self' 'unsafe-inline'; "
-                "font-src 'self'; "
-                "img-src 'self' data: blob: https:; "
-                "connect-src 'self'; "
-                "frame-ancestors 'none'"
-            )
-        elif is_tool_render:
-            # Skip framing headers for tools.
-            pass
-        elif is_document_pdf_preview:
-            response.headers["X-Frame-Options"] = "SAMEORIGIN"
-            response.headers["Content-Security-Policy"] = (
-                "default-src 'none'; "
-                "frame-ancestors 'self'"
-            )
-        else:
-            response.headers["X-Frame-Options"] = "DENY"
-            # NOTE: `style-src 'unsafe-inline'` is intentionally retained.
-            # `static/index.html` and `static/login.html` ship inline <style>
-            # blocks, and several JS modules build runtime `style=""` attrs.
-            # Migrating to nonce-only requires templating the HTML files +
-            # auditing every JS-set style attribute. Since inline styles
-            # don't execute script, the residual risk is visual-only.
-            response.headers["Content-Security-Policy"] = (
-                "default-src 'self'; "
-                f"script-src 'self' 'nonce-{nonce}' https://cdn.jsdelivr.net; "
-                "style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; "
-                "font-src 'self' https://cdn.jsdelivr.net; "
-                "img-src 'self' data: blob:; "
-                "media-src 'self' blob:; "
-                "connect-src 'self'; "
-                "frame-src 'self'; "
-                "frame-ancestors 'none'"
-            )
-        return response
+        async def send_wrapper(message):
+            if message["type"] == "http.response.start":
+                headers = list(message.get("headers", []))
+
+                def set_header(name: str, value: str):
+                    name_bytes = name.encode("latin-1")
+                    # Remove any existing header with the same name (case-insensitive)
+                    # so we don't emit duplicates if something upstream already set it.
+                    nonlocal headers
+                    name_lower = name.lower()
+                    headers = [
+                        (k, v) for k, v in headers
+                        if k.decode("latin-1").lower() != name_lower
+                    ]
+                    headers.append((name_bytes, value.encode("latin-1")))
+
+                set_header("X-Content-Type-Options", "nosniff")
+                set_header("Referrer-Policy", "no-referrer")
+                set_header("Permissions-Policy", "camera=(), microphone=(self), geolocation=()")
+
+                if is_https:
+                    set_header("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
+
+                if is_report:
+                    set_header(
+                        "Content-Security-Policy",
+                        "default-src 'self'; "
+                        "script-src 'self' 'unsafe-inline'; "
+                        "style-src 'self' 'unsafe-inline'; "
+                        "font-src 'self'; "
+                        "img-src 'self' data: blob: https:; "
+                        "connect-src 'self'; "
+                        "frame-ancestors 'none'"
+                    )
+                elif is_tool_render:
+                    # Skip framing headers for tools.
+                    pass
+                elif is_document_pdf_preview:
+                    set_header("X-Frame-Options", "SAMEORIGIN")
+                    set_header(
+                        "Content-Security-Policy",
+                        "default-src 'none'; "
+                        "frame-ancestors 'self'"
+                    )
+                else:
+                    set_header("X-Frame-Options", "DENY")
+                    # NOTE: `style-src 'unsafe-inline'` is intentionally retained.
+                    # `static/index.html` and `static/login.html` ship inline <style>
+                    # blocks, and several JS modules build runtime `style=""` attrs.
+                    # Migrating to nonce-only requires templating the HTML files +
+                    # auditing every JS-set style attribute. Since inline styles
+                    # don't execute script, the residual risk is visual-only.
+                    set_header(
+                        "Content-Security-Policy",
+                        "default-src 'self'; "
+                        f"script-src 'self' 'nonce-{nonce}' https://cdn.jsdelivr.net; "
+                        "style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; "
+                        "font-src 'self' https://cdn.jsdelivr.net; "
+                        "img-src 'self' data: blob:; "
+                        "media-src 'self' blob:; "
+                        "connect-src 'self'; "
+                        "frame-src 'self'; "
+                        "frame-ancestors 'none'"
+                    )
+
+                message["headers"] = headers
+
+            await send(message)
+
+        await self.app(scope, receive, send_wrapper)
