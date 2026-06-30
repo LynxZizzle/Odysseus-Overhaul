@@ -31,6 +31,11 @@
 ## Quick Start
 
 Follow The Original Odysseus Setup
+```bash
+git clone https://github.com/LynxZizzle/Odysseus-Overhaul.git
+cd Odysseus-Overhaul
+powershell -ExecutionPolicy Bypass -File .\launch-windows.ps1
+```
 
 Electron Setup
 ```bash
