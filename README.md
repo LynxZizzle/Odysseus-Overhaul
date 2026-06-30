@@ -6,8 +6,8 @@
   A self-hosted AI workspace From pewdiepie<br>
   This Overhaul Adds<br>
   UI Bug Fixes<br>
-  Media Embedding Overhaul So You Can Preview Video/Audio/Images When Embedded<br>
-  Tools Overhaul So You Can Properly Disable Built-In Odysseus MCP Tools And Properly Disable Web_Fetch And Web_Search<br>
+  Media Embedding Overhaul So You Can Preview Video/Audio/Images When Embedded (CSP Blocks And Hotlink Protection Fixes)<br>
+  Tools Overhaul So You Can Properly Disable Built-In MCP Tools As Well As Regular MCP Tools And Properly Disable Web_Fetch And Web_Search<br>
   Electron App + A Browser To Prevent AI Confusion When Using MCP Tools (Like AnythingLLM)
 </p>
 
