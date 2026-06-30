@@ -1487,7 +1487,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   const bulkBar = document.getElementById('memory-bulk-bar');
   if (bulkBar) bulkBar.addEventListener('click', (e) => {
-    if (e.target.closest('button') || e.target === selectAll) return;
+    if (e.target.closest('button') || e.target.closest('label') || e.target.id === 'memory-selected-count' || e.target === selectAll) return;
     selectAll.checked = !selectAll.checked;
     selectAll.dispatchEvent(new Event('change'));
   });
