@@ -41,7 +41,7 @@ Electron Setup
 ```bash
 Go To Windows Settings And Enable Developer Mode
 Install Node.JS
-cd odysseus\Electron
+cd Electron
 npm run build
 Move All Files From Electron\dist\win-unpacked Into Odysseus
 ```
