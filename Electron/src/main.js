@@ -49,40 +49,41 @@ Style.textContent = \`
     position: fixed; top: 0; left: 0; right: 0; height: \${NAV_H}px;
     z-index: 2147483647;
     display: flex; align-items: center; padding: 0 8px; gap: 6px;
-    background: #0d1117; border-bottom: 1px solid #21262d;
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+    background: #111; border-bottom: 1px solid #355a66;
+    font-family: 'Fira Code', 'Courier New', monospace;
     box-sizing: border-box;
     /* block pointer events on the bar background so only buttons/input work */
     -webkit-app-region: drag;
   }
   #_ody-nav * { box-sizing: border-box; -webkit-app-region: no-drag; }
   #_ody-nav button {
-    background: none; border: none; color: #6e7681; cursor: pointer;
+    background: none; border: none; color: #6b8a94; cursor: pointer;
     padding: 5px 7px; border-radius: 5px; font-size: 15px; line-height: 1;
     flex-shrink: 0; display: flex; align-items: center; justify-content: center;
     transition: color .12s, background .12s;
   }
-  #_ody-nav button:hover:not(:disabled) { color: #c9d1d9; background: #21262d; }
+  #_ody-nav button:hover:not(:disabled) { color: #9cdef2; background: #1e2228; }
   #_ody-nav button:disabled { opacity: .3; cursor: default; }
   #_ody-url-wrap {
     flex: 1; display: flex; align-items: center;
-    background: #161b22; border: 1px solid #30363d; border-radius: 7px;
+    background: #1e2228; border: 1px solid #355a66; border-radius: 8px;
     padding: 0 10px; gap: 6px; min-width: 0;
     transition: border-color .15s;
   }
-  #_ody-url-wrap:focus-within { border-color: #58a6ff; }
+  #_ody-url-wrap:focus-within { border-color: #e06c75; }
   #_ody-lock { font-size: 11px; flex-shrink: 0; opacity: .7; }
   #_ody-url {
-    flex: 1; background: none; border: none; color: #c9d1d9;
+    flex: 1; background: none; border: none; color: #9cdef2;
     font-size: 12px; outline: none; min-width: 0; padding: 7px 0;
     font-family: inherit;
   }
   #_ody-go {
-    background: none; border: none; color: #58a6ff; cursor: pointer;
+    background: none; border: none; color: #e06c75; cursor: pointer;
     font-size: 13px; padding: 2px 4px; border-radius: 3px; flex-shrink: 0;
   }
-  #_ody-go:hover { background: #388bfd22; }
+  #_ody-go:hover { background: #e06c7522; }
 \`;
+Style.id = '_ody-nav-style';
 // Insert into <head> if it exists, else <html>
 (document.head || document.documentElement).prepend(Style);
 
@@ -104,6 +105,28 @@ Nav.innerHTML = \`
 // Prepend before body content — document.body may not exist yet so use
 // documentElement and let the browser sort layout
 document.documentElement.prepend(Nav);
+
+// ── Watchdog — re-insert the bar if a page script wipes the DOM ───────────────
+//
+// Some pages (SPAs, frameworks that rebuild <html> on hydration, pages that
+// call document.write, etc.) blow away nodes that were already in the DOM
+// before their own JS ran. Since the preload only runs once per real
+// navigation, we keep a standing MutationObserver that puts the bar back the
+// instant it disappears, plus a low-frequency interval as a safety net.
+
+function EnsureNavPresent() {
+  if (!document.getElementById('_ody-nav')) {
+    document.documentElement.prepend(Nav);
+  }
+  if (!document.getElementById('_ody-nav-style')) {
+    (document.head || document.documentElement).prepend(Style);
+  }
+}
+
+const RootObserver = new MutationObserver(EnsureNavPresent);
+RootObserver.observe(document.documentElement, { childList: true });
+
+setInterval(EnsureNavPresent, 1000);
 
 // ── Wire up once DOM is ready ─────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', function WireNav() {
@@ -146,16 +169,16 @@ document.addEventListener('DOMContentLoaded', function WireNav() {
     }
     // Lock icon
     if (Href.startsWith('https://')) {
-      LockEl.textContent = '\\u{1F512}'; LockEl.style.color = '#3fb950';
+      LockEl.textContent = '\\u{1F512}'; LockEl.style.color = '#50fa7b';
       LockEl.title = 'Secure';
     } else if (Href.startsWith('http://')) {
-      LockEl.textContent = '\\u26A0'; LockEl.style.color = '#f85149';
+      LockEl.textContent = '\\u26A0'; LockEl.style.color = '#e06c75';
       LockEl.title = 'Not secure';
     } else if (Href.startsWith('file://')) {
-      LockEl.textContent = '\\u{1F4C1}'; LockEl.style.color = '#8b949e';
+      LockEl.textContent = '\\u{1F4C1}'; LockEl.style.color = '#6b8a94';
       LockEl.title = 'Local file';
     } else {
-      LockEl.textContent = '\\u{1F512}'; LockEl.style.color = '#3fb950';
+      LockEl.textContent = '\\u{1F512}'; LockEl.style.color = '#50fa7b';
       LockEl.title = '';
     }
     // Back / forward buttons
@@ -341,20 +364,20 @@ function CreateSplash() {
     const IconPath = FindIcon();
     SplashWindow = new BrowserWindow({
         width: 400, height: 260, frame: false, resizable: false, center: true,
-        backgroundColor: '#0f1117', icon: IconPath || undefined,
+        backgroundColor: '#282c34', icon: IconPath || undefined,
         webPreferences: { nodeIntegration: false, contextIsolation: true },
     });
     SplashWindow.loadURL(`data:text/html;charset=utf-8,<!DOCTYPE html><html><head><meta charset="utf-8"><style>
 *{margin:0;padding:0;box-sizing:border-box}
 body{display:flex;flex-direction:column;align-items:center;justify-content:center;height:100vh;
-  background:%230f1117;font-family:'Fira Code','Courier New',monospace;color:%23c9d1d9;
+  background:%23282c34;font-family:'Fira Code','Courier New',monospace;color:%239cdef2;
   user-select:none;-webkit-user-select:none}
-.B{display:flex;align-items:center;gap:10px;margin-bottom:22px;color:%23e6edf3}
+.B{display:flex;align-items:center;gap:10px;margin-bottom:22px;color:%239cdef2}
 .T{font-size:20px;font-weight:600;letter-spacing:-0.2px}
-.S{font-size:12px;color:%238b949e;margin-bottom:22px;min-height:16px}
-.PT{width:240px;height:2px;background:%2321262d;border-radius:1px;overflow:hidden;border:1px solid %2330363d}
-.PF{height:100%25;width:0%25;background:%23388bfd;border-radius:1px;transition:width 0.8s cubic-bezier(0.4,0,0.2,1)}
-.E{font-size:10px;color:%23484f58;margin-top:10px;min-height:12px;font-variant-numeric:tabular-nums}
+.S{font-size:12px;color:%236b8a94;margin-bottom:22px;min-height:16px}
+.PT{width:240px;height:2px;background:%231e2228;border-radius:1px;overflow:hidden;border:1px solid %23355a66}
+.PF{height:100%25;width:0%25;background:%23e06c75;border-radius:1px;transition:width 0.8s cubic-bezier(0.4,0,0.2,1)}
+.E{font-size:10px;color:%236b8a94;margin-top:10px;min-height:12px;font-variant-numeric:tabular-nums}
 </style></head><body>
 <div class="B"><svg viewBox="0 0 32 32" width="28" height="28" fill="currentColor">
   <path d="M16 4L16 22L6 22Z"/><path d="M16 8L16 22L24 22Z" opacity="0.6"/>
@@ -374,7 +397,7 @@ function CreateWindow() {
     MainWindow = new BrowserWindow({
         width: 1280, height: 860, minWidth: 800, minHeight: 600,
         title: 'Odysseus', icon: IconPath || undefined,
-        backgroundColor: '#0f1117', autoHideMenuBar: true,
+        backgroundColor: '#282c34', autoHideMenuBar: true,
         webPreferences: { nodeIntegration: false, contextIsolation: true, sandbox: true },
         show: false,
     });
@@ -442,7 +465,7 @@ function CreateBrowserToolWindow(StartUrl) {
     const Win = new BrowserWindow({
         width: 1200, height: 840, minWidth: 600, minHeight: 400,
         title: 'Odysseus Browser Tool', icon: IconPath || undefined,
-        backgroundColor: '#0d1117', autoHideMenuBar: true,
+        backgroundColor: '#282c34', autoHideMenuBar: true,
         webPreferences: {
             nodeIntegration: false,
             contextIsolation: false,   // preload needs to expose globals to page JS
