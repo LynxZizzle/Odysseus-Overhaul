@@ -144,18 +144,29 @@ app.add_middleware(
     ],
 )
 
+# ========= SECURITY HEADERS MIDDLEWARE =========
+# SecurityHeadersMiddleware (core/middleware.py) is pure ASGI, not
+# BaseHTTPMiddleware — it injects headers into the single
+# `http.response.start` ASGI message before any body bytes are sent, so it
+# composes safely with GZipMiddleware regardless of add_middleware order.
+#
+# This used to be a BaseHTTPMiddleware that mutated response.headers after
+# call_next() returned. Combined with GZipMiddleware anywhere in the stack,
+# that pattern could intermittently produce a 200 OK with a correct
+# Content-Length but an empty/truncated body — hit most reliably on small
+# JSON API responses (e.g. /api/mcp/servers/{id} PATCH, /reconnect POST).
+app.add_middleware(SecurityHeadersMiddleware)
+
 # ========= RESPONSE COMPRESSION (gzip) =========
 # The frontend's text assets (style.css, index.html, the JS bundles) shipped
 # uncompressed on every cold load. gzip cuts CSS/JS/HTML by ~75-85% on the wire
 # with no behavioural change. Starlette's GZipMiddleware excludes
 # `text/event-stream` by default, so the SSE streams (chat, shell, research,
 # model-probe — all served with media_type="text/event-stream") are never
-# compressed or buffered; only complete bodies over minimum_size are. The
-# security-header middleware composes cleanly on top.
+# compressed or buffered; only complete bodies over minimum_size are.
+# Must be the outermost middleware (added last) so it compresses the fully
+# finalized response — headers included — as a single atomic operation.
 app.add_middleware(GZipMiddleware, minimum_size=1024, compresslevel=6)
-
-# ========= SECURITY HEADERS MIDDLEWARE =========
-app.add_middleware(SecurityHeadersMiddleware)
 
 
 # ========= REQUEST TIMEOUT (FALLBACK FOR HUNG HANDLERS) =========
@@ -621,7 +632,7 @@ app.include_router(setup_chat_routes(
 ))
 
 # Research (background deep-research tasks)
-from routes.research.research_routes import setup_research_routes
+from routes.research_routes import setup_research_routes
 app.include_router(setup_research_routes(research_handler, session_manager=session_manager))
 
 # History
@@ -685,7 +696,7 @@ from routes.signature_routes import setup_signature_routes
 app.include_router(setup_signature_routes())
 
 # Gallery (image library)
-from routes.gallery.gallery_routes import setup_gallery_routes
+from routes.gallery_routes import setup_gallery_routes
 app.include_router(setup_gallery_routes())
 
 # Persisted image-editor drafts (server-backed projects)
@@ -748,6 +759,18 @@ mcp_manager = McpManager()
 set_mcp_manager(mcp_manager)
 app.include_router(setup_mcp_routes(mcp_manager))
 logger.info("MCP routes initialized")
+
+# ODY_PROXY_ROUTE_V1
+# Universal media proxy registration
+try:
+    from routes.proxy_routes import setup_proxy_routes
+
+    app.include_router(setup_proxy_routes())
+    logger.info("Media proxy routes initialized (/api/proxy/media)")
+except Exception as Error:
+    logger.warning(f"Failed to initialize media proxy routes: {Error}")
+
+
 
 # AI Interaction tools (debates, pipelines, self-managing AI, UI control)
 from src.ai_interaction import set_session_manager as set_ai_session_manager, set_memory_manager as set_ai_memory_manager, set_rag_manager as set_ai_rag_manager
