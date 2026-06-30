@@ -37,11 +37,108 @@ function linkHtml(text, url) {
 }
 
 function imageHtml(alt, url, title) {
+  // ODY_MEDIA_EMBED_V1
   const safeUrl = safeLinkUrl(url);
   if (!safeUrl || safeUrl.startsWith('#')) return escapeHtml(alt || '');
+
   const safeAlt = escapeHtml(alt || '');
-  const safeTitle = title ? ` title="${escapeHtml(title)}"` : '';
-  return `<img src="${escapeHtml(safeUrl)}" alt="${safeAlt}"${safeTitle} loading="lazy" decoding="async">`;
+  const px = '/api/proxy/media?url=' + encodeURIComponent(safeUrl);
+  const al = safeUrl.toLowerCase();
+  const lo = al.split('?')[0];
+
+  // Video
+  if (
+    lo.endsWith('.mp4') ||
+    lo.endsWith('.webm') ||
+    lo.endsWith('.mov') ||
+    al.includes('.mp4?') ||
+    al.includes('.webm?') ||
+    al.includes('giphy.mp4') ||
+    al.includes('giphy.com/media') ||
+    al.includes('media.tenor.com') ||
+    (al.includes('discordapp.net/external') &&
+        (al.includes('.mp4') || al.includes('.webm'))) ||
+    (al.includes('cdn.discordapp.com') &&
+        (al.includes('.mp4') || al.includes('.webm')))
+  ) {
+
+    const autoplay =
+      (lo.includes('giphy') || lo.includes('tenor'))
+        ? 'autoplay loop muted playsinline'
+        : 'controls preload="metadata"';
+
+    return `
+      <div style="
+        width:100%;
+        max-width:100%;
+        overflow:hidden;
+        border-radius:8px;
+        margin:8px 0;
+      ">
+        <video
+          src="${px}"
+          ${autoplay}
+          style="width:100%;height:auto;display:block;"
+        ></video>
+      </div>
+    `;
+  }
+
+  // Audio
+  if (
+    lo.endsWith('.mp3') ||
+    lo.endsWith('.ogg') ||
+    lo.endsWith('.flac') ||
+    lo.endsWith('.wav') ||
+    lo.endsWith('.m4a')
+  ) {
+    return `
+      <div class="w-full max-w-[800px]">
+        <audio
+          src="${px}"
+          controls
+          class="w-full"
+          style="margin:4px 0"
+        ></audio>
+      </div>
+    `;
+  }
+
+  // GIF/APNG
+  if (
+    lo.endsWith('.gif') ||
+    lo.endsWith('.apng') ||
+    (al.includes('.gif'))
+  ) {
+    return `
+      <div class="w-full max-w-[800px]">
+        <img
+          src="${px}"
+          alt="${safeAlt}"
+          loading="lazy"
+          class="w-full h-auto rounded-lg"
+          style="max-height:480px"
+        />
+      </div>
+    `;
+  }
+
+  // Static image fallback
+  const safeTitle =
+    title ? ` title="${escapeHtml(title)}"` : '';
+
+  return `
+    <div class="w-full max-w-[800px]">
+      <img
+        src="${px}"
+        alt="${safeAlt}"
+        ${safeTitle}
+        loading="lazy"
+        decoding="async"
+        class="w-full h-auto"
+      />
+    </div>
+  `;
 }
 
 function _isModelEndpointUrl(rawUrl) {
@@ -605,13 +702,53 @@ export function mdToHtml(src, opts) {
     return placeholder;
   });
 
-  // ALSO preserve <a>/<img> tags the same way (they're now in the HTML from
-  // markdown conversion)
-  s = s.replace(/<(?:a\s+[^>]*>.*?<\/a|img\s+[^>]*?)>/gi, (match) => {
-    const placeholder = `___ALLOWED_HTML_${allowedHtmlBlocks.length}___`;
-    allowedHtmlBlocks.push(sanitizeAllowedHtml(match));
-    return placeholder;
-  });
+  // ALSO preserve <a>/<img>/<video>/<audio> tags (ODY_MEDIA_EMBED_V1)
+  function _proxyMediaSrc(tag) {
+
+    tag = tag.replace(
+      /(\bsrc=)(["\'`])(https?:\/\/[^"'`\s>]+)\2/gi,
+      (m, attr, q, rawUrl) => {
+        return attr + q +
+          '/api/proxy/media?url=' +
+          encodeURIComponent(rawUrl) +
+          q;
+      }
+    );
+
+    const tl = tag.slice(0, 10).toLowerCase();
+
+    if (tl.startsWith('<video') && !tag.includes('style=')) {
+      tag = tag.replace(
+        /^<video/i,
+        '<video style="width:100%;height:auto;display:block;border-radius:6px;"'
+      );
+    }
+
+    else if (tl.startsWith('<img') && !tag.includes('style=')) {
+      tag = tag.replace(
+        /^<img/i,
+        '<img style="width:100%;height:auto;display:block;border-radius:6px;"'
+      );
+    }
+
+    return tag;
+  }
+
+  s = s.replace(
+    /<(?:a\s+[^>]*>.*?<\/a|img\s+[^>]*?|video\b[^>]*>(?:[\s\S]*?)<\/video|audio\b[^>]*>(?:[\s\S]*?)<\/audio)>/gi,
+    (match) => {
+      const placeholder =
+        `___ALLOWED_HTML_${allowedHtmlBlocks.length}___`;
+
+      allowedHtmlBlocks.push(
+        sanitizeAllowedHtml(
+          _proxyMediaSrc(match)
+        )
+      );
+
+      return placeholder;
+    }
+  );
 
   // Now escape everything else
   s = s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');

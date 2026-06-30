@@ -827,6 +827,7 @@ def setup_chat_routes(
                 _effective_mode = 'chat'
                 chat_mode = 'chat'
         # Global admin disabled tools
+        # ODY_COMBINED_V1
         from src.settings import get_setting
         _global_disabled = get_setting("disabled_tools", [])
         if _global_disabled and isinstance(_global_disabled, list):
@@ -835,6 +836,11 @@ def setup_chat_routes(
                 disabled_tools.update(t for t in _global_disabled if t not in {"web_search", "web_fetch"})
             else:
                 disabled_tools.update(_global_disabled)
+        if _global_disabled and isinstance(_global_disabled, list):
+            _web_tools = {"web_search", "web_fetch"}
+            _explicitly_disabled_web = _web_tools & set(_global_disabled)
+            if _explicitly_disabled_web:
+                disabled_tools.update(_explicitly_disabled_web)
 
         # Light auto-escalation: the user is in chat mode and just expressed a
         # notes/calendar/email intent. Grant the relevant managers but withhold
@@ -1255,14 +1261,7 @@ def setup_chat_routes(
                 try:
                     from src.settings import get_setting
                     from src.agent_tools import MAX_AGENT_ROUNDS as _DEFAULT_ROUNDS
-                    # Per-message tool budget from settings; guard defensively in
-                    # case settings.json was hand-edited to a non-numeric value
-                    # (the HTTP admin endpoint validates, but direct edits bypass
-                    # it). 0 = unlimited, matching auth_routes set_settings().
-                    try:
-                        _tool_budget = int(get_setting("agent_max_tool_calls", 0))
-                    except (TypeError, ValueError):
-                        _tool_budget = 0
+                    _tool_budget = int(get_setting("agent_max_tool_calls", 0))
                     # Per-message round cap from settings; clamp defensively in
                     # case settings.json was hand-edited to a bad value.
                     try:
@@ -1297,7 +1296,6 @@ def setup_chat_routes(
                         approved_plan=approved_plan or None,
                         workspace=workspace or None,
                         forced_tools=_forced_tools,
-                        uploaded_files=ctx.uploaded_files,
                     ):
                         if chunk.startswith("data: ") and not chunk.startswith("data: [DONE]"):
                             try:

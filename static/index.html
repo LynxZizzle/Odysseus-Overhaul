@@ -294,8 +294,8 @@
               </div>
             </div>
             <div id="memory-bulk-bar" class="memory-bulk-bar hidden">
-              <label class="memory-bulk-check-all" style="position:relative;top:0px;"><input type="checkbox" id="memory-select-all" /> All</label>
-              <span id="memory-selected-count">0 Selected</span>
+              <label class="memory-bulk-check-all" style="position:relative;top:0px;user-select:none;-webkit-user-select:none;"><input type="checkbox" id="memory-select-all" /> All</label>
+              <span id="memory-selected-count" style="user-select:none;-webkit-user-select:none;">0 Selected</span>
               <button id="memory-bulk-delete" class="memory-toolbar-btn danger" disabled><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-1px;margin-right:3px;"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/></svg>Delete</button>
               <button id="memory-bulk-cancel" class="memory-toolbar-btn" title="Cancel (Esc)" style="margin-left:4px;padding:3px 6px;"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
             </div>
@@ -396,8 +396,8 @@
             </div>
             <div id="skills-audit-panel" class="skills-audit-panel hidden"></div>
             <div id="skills-bulk-bar" class="memory-bulk-bar hidden">
-              <label class="memory-bulk-check-all" style="position:relative;top:0px;"><input type="checkbox" id="skills-select-all" /> All</label>
-              <span id="skills-selected-count">0 Selected</span>
+              <label class="memory-bulk-check-all" style="position:relative;top:0px;user-select:none;-webkit-user-select:none;"><input type="checkbox" id="skills-select-all" /> All</label>
+              <span id="skills-selected-count" style="user-select:none;-webkit-user-select:none;">0 Selected</span>
               <button id="skills-bulk-publish" class="memory-toolbar-btn" disabled title="Publish selected drafts" style="margin-left:auto;"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-1px;margin-right:3px;"><polyline points="20 6 9 17 4 12"/></svg>Approve</button>
               <button id="skills-bulk-audit" class="memory-toolbar-btn" disabled title="Audit selected draft skills"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-1px;margin-right:3px;"><polygon points="5 3 19 12 5 21 5 3"/></svg>Audit</button>
               <button id="skills-bulk-delete-nonpassing" class="memory-toolbar-btn danger" disabled title="Delete selected duplicates, generic/irrelevant skills, failed audits, and skills below threshold"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-1px;margin-right:3px;"><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11l4 4"/><path d="M14 11l-4 4"/></svg>Delete non passing</button>
@@ -920,7 +920,14 @@
           <span id="assistant-notif-dot" class="sidebar-notif-dot" style="display:none"></span>
         </div>
 
-        <div class="list-item" id="tool-theme-btn">
+        <!-- ODY_COMBINED_V1 Agent Tools sidebar shortcut (admin only) -->
+        <div class="list-item admin-only" id="tool-agenttools-btn" title="Agent Tools - configure tool toggles">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;opacity:0.5;">
+            <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/>
+          </svg>
+          <span class="grow">Agent Tools</span>
+        </div>
+                <div class="list-item" id="tool-theme-btn">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
             stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
             style="flex-shrink:0;opacity:0.5;">
@@ -2259,6 +2266,17 @@
             <div class="admin-toggle-sub" style="margin-bottom:8px">All external service connections in one place.</div>
             <div id="unified-integrations-list"></div>
             <div id="unified-intg-form" style="display:none"></div>
+            <!-- ODY_BROWSER_BTN_V1 Browser Tool card -->
+            <div class="admin-card" style="margin-top:12px;">
+              <h2><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;margin-right:5px;opacity:0.6"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>Browser Tool</h2>
+              <div class="admin-toggle-sub" style="margin-bottom:10px">Open a private browser window to log into sites. Sessions and cookies are saved and used automatically by <code>browse_page</code> and <code>browse_search</code>. Also enables <code>browse_click</code>, <code>browse_fill</code>, <code>browse_evaluate</code>, and <code>browse_screenshot</code>.</div>
+              <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+                <button type="button" class="admin-btn-add" id="ody-open-browser-btn" style="display:inline-flex;align-items:center;gap:6px;"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="opacity:0.8"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>Open Private Browser</button>
+                <button type="button" class="admin-btn" id="ody-clear-browser-btn" style="display:inline-flex;align-items:center;gap:6px;opacity:0.75;"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6"/></svg>Clear Session Data</button>
+                <button type="button" class="admin-btn" id="ody-browser-status-btn" style="display:inline-flex;align-items:center;gap:6px;opacity:0.6;font-size:11px;">Check Status</button>
+              </div>
+              <div id="ody-browser-status" style="margin-top:8px;font-size:11px;opacity:0.65;min-height:16px;"></div>
+            </div>
             <div style="text-align:right;padding:8px 0;">
               <button type="button" class="admin-btn-add" id="unified-intg-add-btn" style="text-align:center;display:inline-flex;align-items:center;justify-content:center;gap:5px;flex-shrink:0;"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>Add Integration</button>
             </div>

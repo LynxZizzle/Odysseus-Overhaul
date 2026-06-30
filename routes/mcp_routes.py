@@ -91,7 +91,8 @@ def _apply_mcp_oauth_env(env: dict, oauth_cfg) -> None:
 
 
 def _load_disabled_map():
-    """Load per-server disabled tool sets from DB."""
+    """Load per-server disabled tool sets from DB + settings.json for builtins.
+    ODY_COMBINED_V1"""
     db = SessionLocal()
     try:
         disabled_map = {}
@@ -103,6 +104,15 @@ def _load_disabled_map():
                         disabled_map[srv.id] = set(names)
                 except (json.JSONDecodeError, TypeError):
                     pass
+        try:
+            from src.settings import get_setting
+            builtin_disabled = get_setting("mcp_builtin_disabled", {})
+            if isinstance(builtin_disabled, dict):
+                for sid, names in builtin_disabled.items():
+                    if names:
+                        disabled_map.setdefault(sid, set()).update(names)
+        except Exception:
+            pass
         return disabled_map
     finally:
         db.close()
@@ -334,22 +344,43 @@ def setup_mcp_routes(mcp_manager: McpManager):
             srv.is_enabled = enabled
             db.commit()
 
+            Connected = False
+            ConnectError = None
+
             if enabled:
+                # Always disconnect any stale/half-open connection first —
+                # without this, a server left in an error state from a prior
+                # failed connection attempt can silently no-op here, making
+                # "Enable" appear to do nothing.
+                await mcp_manager.disconnect_server(server_id)
+
                 args = json.loads(srv.args) if srv.args else []
                 env = json.loads(srv.env) if srv.env else {}
-                await mcp_manager.connect_server(
-                    server_id=server_id,
-                    name=srv.name,
-                    transport=srv.transport,
-                    command=srv.command,
-                    args=args,
-                    env=env,
-                    url=srv.url,
-                )
+                try:
+                    Connected = await mcp_manager.connect_server(
+                        server_id=server_id,
+                        name=srv.name,
+                        transport=srv.transport,
+                        command=srv.command,
+                        args=args,
+                        env=env,
+                        url=srv.url,
+                    )
+                except Exception as ConnectException:
+                    Connected = False
+                    ConnectError = str(ConnectException)
             else:
                 await mcp_manager.disconnect_server(server_id)
 
-            return {"id": server_id, "is_enabled": enabled}
+            Status = mcp_manager.get_server_status(server_id)
+            return {
+                "id": server_id,
+                "is_enabled": enabled,
+                "connected": Connected if enabled else False,
+                "status": Status.get("status", "disconnected"),
+                "tool_count": Status.get("tool_count", 0),
+                "error": ConnectError or Status.get("error"),
+            }
         finally:
             db.close()
 
@@ -605,6 +636,55 @@ def setup_mcp_routes(mcp_manager: McpManager):
             return HTMLResponse(_oauth_result_page("Error", str(e)), status_code=500)
         finally:
             db.close()
+
+
+    # ODY_COMBINED_V1 builtin MCP tool toggle endpoints
+    @router.get("/builtin-tools")
+    def get_builtin_tools(request: Request):
+        require_admin(request)
+        from src.settings import get_setting
+        disabled_map = get_setting("mcp_builtin_disabled", {})
+        if not isinstance(disabled_map, dict):
+            disabled_map = {}
+        result = []
+        for t in mcp_manager.get_all_tools():
+            sid = t["server_id"]
+            if not mcp_manager.is_builtin(sid):
+                continue
+            result.append({
+                "server_id": sid,
+                "server_name": t["server_name"],
+                "name": t["name"],
+                "description": t["description"],
+                "is_disabled": t["name"] in set(disabled_map.get(sid, [])),
+            })
+        return result
+
+    @router.patch("/builtin-tools")
+    async def update_builtin_tool(request: Request):
+        require_admin(request)
+        from src.settings import load_settings, save_settings
+        body = await request.json()
+        server_id = body.get("server_id", "")
+        disabled = body.get("disabled", [])
+        if not server_id:
+            raise HTTPException(400, "server_id required")
+        if not mcp_manager.is_builtin(server_id):
+            raise HTTPException(400, f"Not a builtin server: {server_id}")
+        if not isinstance(disabled, list):
+            raise HTTPException(400, "disabled must be a list")
+        settings = load_settings()
+        dm = settings.get("mcp_builtin_disabled", {})
+        if not isinstance(dm, dict):
+            dm = {}
+        if disabled:
+            dm[server_id] = disabled
+        else:
+            dm.pop(server_id, None)
+        settings["mcp_builtin_disabled"] = dm
+        save_settings(settings)
+        return {"server_id": server_id, "disabled_count": len(disabled)}
+    # ODY_COMBINED_V1 end builtin endpoints
 
     return router
 
