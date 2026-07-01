@@ -37,8 +37,7 @@ cd Odysseus-Overhaul
 powershell -ExecutionPolicy Bypass -File .\launch-windows.ps1
 ```
 ```bash
-npx playwright install chromium
-npx @playwright/mcp install-browser chromium
+npx playwright install chrome
 ```
 
 Electron Setup
