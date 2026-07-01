@@ -4,7 +4,7 @@
         "userDataDir": "playwright-mcp_user-data-dir",
         "launchOptions": {
             "headless": false,
-            "executablePath": "C:\\Users\\User\\AppData\\Local\\ms-playwright\\chromium-1228\\chrome-win\\chrome.exe",
+            "executablePath": "C:\\Users\\User\\AppData\\Local\\ms-playwright\\chromium-1228\\chrome-win64\\chrome.exe"
             "args": [
                 "--enable-extensions",
                 "--disable-extensions-except=C:\\Users\\User\\AppData\\Local\\Google\\Chrome\\User Data\\Default\\Extensions\\aefkmifgmaafnojlojpnekbpbmjiiogg\\0.9.0_0,C:\\Users\\User\\AppData\\Local\\Google\\Chrome\\User Data\\Default\\Extensions\\cjpalhdlnbpafiamejdnhcphjbkeiagm\\1.58.0_0,C:\\Users\\User\\AppData\\Local\\Google\\Chrome\\User Data\\Default\\Extensions\\gighmmpiobklfepjocnamgkkbiglidom\\6.14.1_0",
