@@ -36,6 +36,9 @@ git clone https://github.com/LynxZizzle/Odysseus-Overhaul.git
 cd Odysseus-Overhaul
 powershell -ExecutionPolicy Bypass -File .\launch-windows.ps1
 ```
+```bash
+npx -y @playwright/mcp@latest --version
+```
 
 Electron Setup
 ```bash
