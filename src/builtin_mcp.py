@@ -82,7 +82,7 @@ _BUILTIN_NPX_SERVERS = {
     "builtin_browser": {
         "name": "Built-in: Browser",
         "command": "npx",
-        "args": ["npx.cmd", "-y", "@playwright/mcp@latest", "--config", "playwright-mcp-config.json"],,
+        "args": ["-y", "@playwright/mcp@latest", "--config", "playwright-mcp-config.json"],
     }
 }
 
