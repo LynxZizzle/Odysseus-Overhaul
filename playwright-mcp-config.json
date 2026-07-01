@@ -3,7 +3,7 @@
         "browserName": "chromium",
         "userDataDir": "ChromiumProfile",
         "launchOptions": {
-            "headless": false
+            "headless": false,
             "args": [
                 "--enable-extensions",
                 "--disable-extensions-except=C:\\Users\\User\\AppData\\Local\\Google\\Chrome\\User Data\\Default\\Extensions\\aefkmifgmaafnojlojpnekbpbmjiiogg\\0.9.0_0",
