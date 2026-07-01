@@ -5,8 +5,8 @@
             "headless": false,
             "args": [
                 "--enable-extensions",
-                "--disable-extensions-except=C:\\Users\\User\\odysseus\\extensions\\aefkmifgmaafnojlojpnekbpbmjiiogg\\0.9.0_0,C:\\Users\\User\\odysseus\\extensions\\cjpalhdlnbpafiamejdnhcphjbkeiagm\\1.58.0_0,C:\\Users\\User\\odysseus\\extensions\\gighmmpiobklfepjocnamgkkbiglidom\\6.14.1_0",
-                "--load-extension=C:\\Users\\User\\odysseus\\extensions\\aefkmifgmaafnojlojpnekbpbmjiiogg\\0.9.0_0,C:\\Users\\User\\odysseus\\extensions\\cjpalhdlnbpafiamejdnhcphjbkeiagm\\1.58.0_0,C:\\Users\\User\\odysseus\\extensions\\gighmmpiobklfepjocnamgkkbiglidom\\6.14.1_0"
+                "--disable-extensions-except=C:\\Users\\User\\odysseus\\extensions\\aefkmifgmaafnojlojpnekbpbmjiiogg\\0.9.0_0,C:\\Users\\User\\odysseus\\extensions\\gighmmpiobklfepjocnamgkkbiglidom\\6.14.1_0,C:\\Users\\User\\odysseus\\extensions\\uBOLite",
+                "--load-extension=C:\\Users\\User\\odysseus\\extensions\\aefkmifgmaafnojlojpnekbpbmjiiogg\\0.9.0_0,C:\\Users\\User\\odysseus\\extensions\\gighmmpiobklfepjocnamgkkbiglidom\\6.14.1_0,C:\\Users\\User\\odysseus\\extensions\\uBOLite"
             ]
         },
         "userDataDir": "playwright-mcp_user-data-dir"
