@@ -2,7 +2,6 @@
     "browser": {
         "browserName": "chromium",
         "launchOptions": {
-            "channel": "chrome",
             "headless": false,
             "args": [
                 "--enable-extensions",
