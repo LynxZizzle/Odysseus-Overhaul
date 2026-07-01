@@ -6,8 +6,8 @@
             "headless": false,
             "args": [
                 "--enable-extensions",
-                "--disable-extensions-except=C:\\Users\\User\\AppData\\Local\\Google\\Chrome\\User Data\\Default\\Extensions\\aefkmifgmaafnojlojpnekbpbmjiiogg\\0.9.0_0",
-                "--load-extension=C:\\Users\\User\\AppData\\Local\\Google\\Chrome\\User Data\\Default\\Extensions\\aefkmifgmaafnojlojpnekbpbmjiiogg\\0.9.0_0"
+                "--disable-extensions-except=C:\\Users\\User\\AppData\\Local\\Google\\Chrome\\User Data\\Default\\Extensions\\gighmmpiobklfepjocnamgkkbiglidom\\6.14.1_0,C:\Users\User\AppData\Local\Google\Chrome\User Data\Default\Extensions\cjpalhdlnbpafiamejdnhcphjbkeiagm\1.58.0_0,C:\Users\User\AppData\Local\Google\Chrome\User Data\Default\Extensions\gighmmpiobklfepjocnamgkkbiglidom\6.14.1_0",
+                "--load-extension=C:\\Users\\User\\AppData\\Local\\Google\\Chrome\\User Data\\Default\\Extensions\\gighmmpiobklfepjocnamgkkbiglidom\\6.14.1_0,C:\Users\User\AppData\Local\Google\Chrome\User Data\Default\Extensions\cjpalhdlnbpafiamejdnhcphjbkeiagm\1.58.0_0,C:\Users\User\AppData\Local\Google\Chrome\User Data\Default\Extensions\gighmmpiobklfepjocnamgkkbiglidom\6.14.1_0"
             ]
         }
     },
