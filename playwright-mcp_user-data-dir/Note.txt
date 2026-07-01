@@ -1,0 +1,2 @@
+C:\Users\User\odysseus\src\builtin_mcp.py Modified
+C:\Users\User\odysseus\playwright-mcp-config.json Custom
