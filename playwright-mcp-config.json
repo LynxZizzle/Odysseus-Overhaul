@@ -1,16 +1,16 @@
 {
     "browser": {
         "browserName": "chromium",
-        "channel": "chrome",
-        "userDataDir": "playwright-mcp_user-data-dir",
         "launchOptions": {
+            "channel": "chrome",
             "headless": false,
             "args": [
                 "--enable-extensions",
-                "--disable-extensions-except=C:\\playwright-extensions\\aefkmifgmaafnojlojpnekbpbmjiiogg,C:\\playwright-extensions\\cjpalhdlnbpafiamejdnhcphjbkeiagm,C:\\playwright-extensions\\gighmmpiobklfepjocnamgkkbiglidom",
-                "--load-extension=C:\\playwright-extensions\\aefkmifgmaafnojlojpnekbpbmjiiogg,C:\\playwright-extensions\\cjpalhdlnbpafiamejdnhcphjbkeiagm,C:\\playwright-extensions\\gighmmpiobklfepjocnamgkkbiglidom"
+                "--disable-extensions-except=C:\\Users\\User\\AppData\\Local\\Google\\Chrome\\User Data\\Default\\Extensionsaefkmifgmaafnojlojpnekbpbmjiiogg,C:\\Users\\User\\AppData\\Local\\Google\\Chrome\\User Data\\Default\\Extensionscjpalhdlnbpafiamejdnhcphjbkeiagm,C:\\Users\\User\\AppData\\Local\\Google\\Chrome\\User Data\\Default\\Extensionsgighmmpiobklfepjocnamgkkbiglidom",
+                "--load-extension=C:\\Users\\User\\AppData\\Local\\Google\\Chrome\\User Data\\Default\\Extensionsaefkmifgmaafnojlojpnekbpbmjiiogg,C:\\Users\\User\\AppData\\Local\\Google\\Chrome\\User Data\\Default\\Extensionscjpalhdlnbpafiamejdnhcphjbkeiagm,C:\\Users\\User\\AppData\\Local\\Google\\Chrome\\User Data\\Default\\Extensionsgighmmpiobklfepjocnamgkkbiglidom"
             ]
-        }
+        },
+        "userDataDir": "playwright-mcp_user-data-dir"
     },
     "capabilities": ["core", "tabs", "pdf", "history", "wait", "files", "install"]
 }
