@@ -1,7 +1,7 @@
 {
     "browser": {
         "browserName": "chromium",
-        "userDataDir": "ChromiumProfile",
+        "userDataDir": "playwright-mcp_user-data-dir",
         "launchOptions": {
             "headless": false,
             "args": [
