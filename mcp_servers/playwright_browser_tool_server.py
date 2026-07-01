@@ -1,11 +1,14 @@
 #!/usr/bin/env python3
-# browser_tool_server.py - Final version with controlled browser opening
+# browser_tool_server.py - Playwright-backed version (no Electron dependency)
+#
+# Requires: pip install playwright && playwright install chromium
 import asyncio
+import base64
 import json
-import sys
-import urllib.request
-import urllib.error
 import logging
+import os
+import re
+import sys
 from collections import deque
 from datetime import datetime
 
@@ -15,8 +18,34 @@ from mcp.server import Server
 from mcp.server.stdio import stdio_server
 from mcp.types import Tool, TextContent
 
+try:
+    from playwright.async_api import async_playwright
+except ImportError:
+    print(
+        "Playwright is not installed. Run:\n"
+        "  pip install playwright\n"
+        "  playwright install chromium",
+        file=sys.stderr,
+    )
+    raise
+
 app = Server("browser-tool")
-ELECTRON_API = "http://127.0.0.1:7002"
+
+SCREENSHOT_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "screenshots")
+
+# =========================
+# Persistent Browser Memory
+# =========================
+BrowserMemory = {
+    "CurrentUrl": None,
+    "CurrentTitle": None,
+    "CurrentContent": "",
+    "NavigationHistory": deque(maxlen=100),
+    "KnownPages": {},
+    "MediaCache": {},
+    "LastScreenshot": None,
+    "LastUpdated": None
+}
 
 # =========================
 # Related-tool hints
@@ -42,20 +71,6 @@ def _WithHint(Text, Name):
     return Text
 
 
-# =========================
-# Persistent Browser Memory
-# =========================
-BrowserMemory = {
-    "CurrentUrl": None,
-    "CurrentTitle": None,
-    "CurrentContent": "",
-    "NavigationHistory": deque(maxlen=100),
-    "KnownPages": {},
-    "MediaCache": {},
-    "LastScreenshot": None,
-    "LastUpdated": None
-}
-
 def UpdateMemory(Url, Title="", Content=""):
     BrowserMemory["CurrentUrl"] = Url
     BrowserMemory["CurrentTitle"] = Title
@@ -73,19 +88,98 @@ def UpdateMemory(Url, Title="", Content=""):
         "updated": BrowserMemory["LastUpdated"]
     }
 
-def _call(Endpoint, Body):
-    Data = json.dumps(Body).encode()
-    Req = urllib.request.Request(
-        ELECTRON_API + Endpoint,
-        data=Data,
-        headers={"Content-Type": "application/json"},
-        method="POST",
+
+# =========================
+# Playwright session state
+# =========================
+_Playwright = None
+_HeadlessBrowser = None
+_HeadlessPage = None
+_VisibleBrowser = None
+_VisiblePage = None
+_StateLock = asyncio.Lock()
+
+
+async def _EnsurePlaywright():
+    global _Playwright
+    if _Playwright is None:
+        _Playwright = await async_playwright().start()
+    return _Playwright
+
+
+async def _GetHeadlessPage():
+    global _HeadlessBrowser, _HeadlessPage
+    async with _StateLock:
+        Playwright = await _EnsurePlaywright()
+        if _HeadlessBrowser is None:
+            _HeadlessBrowser = await Playwright.chromium.launch(headless=True)
+        if _HeadlessPage is None or _HeadlessPage.is_closed():
+            _HeadlessPage = await _HeadlessBrowser.new_page()
+        return _HeadlessPage
+
+
+async def _GetVisiblePage():
+    global _VisibleBrowser, _VisiblePage
+    async with _StateLock:
+        Playwright = await _EnsurePlaywright()
+        if _VisibleBrowser is None:
+            _VisibleBrowser = await Playwright.chromium.launch(headless=False)
+        if _VisiblePage is None or _VisiblePage.is_closed():
+            _VisiblePage = await _VisibleBrowser.new_page()
+        return _VisiblePage
+
+
+def _ActivePageForInteraction():
+    # click/fill/evaluate prefer whichever visible page is already open,
+    # falling back to the headless one so evaluate still works pre-open.
+    return _VisiblePage if (_VisiblePage is not None and not _VisiblePage.is_closed()) else _HeadlessPage
+
+
+# =========================
+# Content extraction helpers
+# =========================
+def _HtmlToText(Html):
+    NoScripts = re.sub(r'<(script|style)[^>]*>.*?</\1>', ' ', Html, flags=re.DOTALL | re.IGNORECASE)
+    NoTags = re.sub(r'<[^>]+>', ' ', NoScripts)
+    Collapsed = re.sub(r'\s+', ' ', NoTags)
+    return Collapsed.strip()
+
+
+def _HtmlToMarkdown(Html):
+    Working = re.sub(r'<(script|style)[^>]*>.*?</\1>', ' ', Html, flags=re.DOTALL | re.IGNORECASE)
+    for Level in range(1, 7):
+        Working = re.sub(
+            rf'<h{Level}[^>]*>(.*?)</h{Level}>',
+            lambda Match, L=Level: f"\n{'#' * L} {_HtmlToText(Match.group(1))}\n",
+            Working, flags=re.DOTALL | re.IGNORECASE
+        )
+    Working = re.sub(
+        r'<a[^>]+href=["\']([^"\']+)["\'][^>]*>(.*?)</a>',
+        lambda Match: f"[{_HtmlToText(Match.group(2))}]({Match.group(1)})",
+        Working, flags=re.DOTALL | re.IGNORECASE
     )
-    try:
-        with urllib.request.urlopen(Req, timeout=45) as Resp:
-            return json.loads(Resp.read().decode())
-    except Exception as e:
-        return {"ok": False, "error": str(e)}
+    Working = re.sub(r'<li[^>]*>(.*?)</li>', lambda Match: f"\n- {_HtmlToText(Match.group(1))}", Working, flags=re.DOTALL | re.IGNORECASE)
+    Working = re.sub(r'<(p|br|div|tr)[^>]*>', '\n', Working, flags=re.IGNORECASE)
+    Working = re.sub(r'<[^>]+>', '', Working)
+    Working = re.sub(r'\n\s*\n+', '\n\n', Working)
+    return Working.strip()
+
+
+async def _CaptureContent(Page, CaptureAs):
+    if CaptureAs == "html":
+        return await Page.content()
+    if CaptureAs == "links":
+        Links = await Page.eval_on_selector_all(
+            "a[href]",
+            "els => els.map(el => ({text: el.innerText.trim(), href: el.href}))"
+        )
+        return json.dumps(Links, ensure_ascii=False)
+    if CaptureAs == "markdown":
+        Html = await Page.content()
+        return _HtmlToMarkdown(Html)
+    Html = await Page.content()
+    return _HtmlToText(Html)
+
 
 @app.list_tools()
 async def list_tools():
@@ -190,44 +284,62 @@ async def list_tools():
         ),
     ]
 
+
 @app.call_tool()
 async def call_tool(Name, Arguments):
     try:
         if Name == "browse_page":
             Url = Arguments.get("url", "").strip()
-            Result = await asyncio.to_thread(_call, "/scrape", {
-                "url": Url,
-                "capture_as": Arguments.get("capture_as", "text"),
-                "wait_ms": Arguments.get("wait_ms", 800)
-            })
-            if not Result.get("ok"):
-                return [TextContent(type="text", text=f"Error: {Result.get('error')}")]
+            CaptureAs = Arguments.get("capture_as", "text")
+            WaitMs = Arguments.get("wait_ms", 800)
+            if not Url:
+                return [TextContent(type="text", text="Error: url is required")]
 
-            Content = Result.get("content", "")
-            PageUrl = Result.get("url", Url)
-            PageTitle = Result.get("title", "")
-            UpdateMemory(PageUrl, PageTitle, str(Content))
-            Text = f"URL: {PageUrl}\nTitle: {PageTitle}\n\n{str(Content)[:20000]}"
+            Page = await _GetHeadlessPage()
+            try:
+                await Page.goto(Url, wait_until="domcontentloaded", timeout=45000)
+                await Page.wait_for_timeout(WaitMs)
+                Content = await _CaptureContent(Page, CaptureAs)
+                Title = await Page.title()
+                PageUrl = Page.url
+            except Exception as PageError:
+                return [TextContent(type="text", text=f"Error: {str(PageError)}")]
+
+            UpdateMemory(PageUrl, Title, str(Content))
+            Text = f"URL: {PageUrl}\nTitle: {Title}\n\n{str(Content)[:20000]}"
             return [TextContent(type="text", text=_WithHint(Text, Name))]
 
         elif Name == "browse_open":
             Url = Arguments.get("url", "").strip()
-            Result = await asyncio.to_thread(_call, "/open", {"url": Url} if Url else {})
-            if not Result.get("ok"):
-                return [TextContent(type="text", text=f"Error opening browser: {Result.get('error', 'Unknown error — is Odysseus running with the browser tool HTTP server on port 7002?')}")]
-            if Url:
-                UpdateMemory(Url, "Visible Browser Opened", "")
-            Text = f"Visible browser opened" + (f" at {Url}" if Url else "") + "."
+            try:
+                Page = await _GetVisiblePage()
+                if Url:
+                    await Page.goto(Url, wait_until="domcontentloaded", timeout=45000)
+                    UpdateMemory(Page.url, await Page.title(), "")
+            except Exception as OpenError:
+                return [TextContent(type="text", text=f"Error opening browser: {str(OpenError)}")]
+
+            Text = "Visible browser opened" + (f" at {Url}" if Url else "") + "."
             return [TextContent(type="text", text=_WithHint(Text, Name))]
 
         elif Name == "browse_screenshot":
             Url = Arguments.get("url") or BrowserMemory["CurrentUrl"]
-            Result = await asyncio.to_thread(_call, "/screenshot", {"url": Url} if Url else {})
-            if Result.get("ok") and Result.get("image"):
-                BrowserMemory["LastScreenshot"] = Result["image"][:500]
-                Text = f"Screenshot captured for {Url}"
-                return [TextContent(type="text", text=_WithHint(Text, Name))]
-            return [TextContent(type="text", text=f"Screenshot failed: {Result.get('error', 'Unknown error')}")]
+            Page = _ActivePageForInteraction() or await _GetHeadlessPage()
+            try:
+                if Url and Page.url != Url:
+                    await Page.goto(Url, wait_until="domcontentloaded", timeout=45000)
+                os.makedirs(SCREENSHOT_DIR, exist_ok=True)
+                Filename = f"screenshot_{datetime.utcnow().strftime('%Y%m%d_%H%M%S_%f')}.png"
+                Filepath = os.path.join(SCREENSHOT_DIR, Filename)
+                await Page.screenshot(path=Filepath, full_page=True)
+                with open(Filepath, "rb") as ImageFile:
+                    ImageBytes = ImageFile.read()
+                BrowserMemory["LastScreenshot"] = base64.b64encode(ImageBytes)[:500].decode()
+            except Exception as ShotError:
+                return [TextContent(type="text", text=f"Screenshot failed: {str(ShotError)}")]
+
+            Text = f"Screenshot captured for {Page.url}\nSaved to: {Filepath}"
+            return [TextContent(type="text", text=_WithHint(Text, Name))]
 
         elif Name == "browse_extract_media":
             Url = Arguments.get("url") or BrowserMemory["CurrentUrl"]
@@ -240,15 +352,19 @@ async def call_tool(Name, Arguments):
             Url = Arguments.get("url", "").strip()
             if not Selector:
                 return [TextContent(type="text", text="Error: selector is required")]
-            Body = {"selector": Selector}
-            if Url:
-                Body["url"] = Url
-            Result = await asyncio.to_thread(_call, "/click", Body)
-            if not Result.get("ok"):
-                return [TextContent(type="text", text=f"Error clicking '{Selector}': {Result.get('error', 'Unknown error')}")]
-            if Result.get("url"):
-                UpdateMemory(Result["url"], BrowserMemory.get("CurrentTitle", ""), BrowserMemory.get("CurrentContent", ""))
-            Text = f"Clicked '{Selector}' ({Result.get('tag', '')})."
+
+            Page = _ActivePageForInteraction() or await _GetVisiblePage()
+            try:
+                if Url:
+                    await Page.goto(Url, wait_until="domcontentloaded", timeout=45000)
+                Tag = await Page.eval_on_selector(Selector, "el => el.tagName.toLowerCase()")
+                await Page.click(Selector, timeout=10000)
+                await Page.wait_for_timeout(500)
+            except Exception as ClickError:
+                return [TextContent(type="text", text=f"Error clicking '{Selector}': {str(ClickError)}")]
+
+            UpdateMemory(Page.url, BrowserMemory.get("CurrentTitle", ""), BrowserMemory.get("CurrentContent", ""))
+            Text = f"Clicked '{Selector}' ({Tag})."
             return [TextContent(type="text", text=_WithHint(Text, Name))]
 
         elif Name == "browse_fill":
@@ -258,13 +374,18 @@ async def call_tool(Name, Arguments):
             Url = Arguments.get("url", "").strip()
             if not Selector:
                 return [TextContent(type="text", text="Error: selector is required")]
-            Body = {"selector": Selector, "value": Value, "submit": Submit}
-            if Url:
-                Body["url"] = Url
-            Result = await asyncio.to_thread(_call, "/fill", Body)
-            if not Result.get("ok"):
-                return [TextContent(type="text", text=f"Error filling '{Selector}': {Result.get('error', 'Unknown error')}")]
-            Text = f"Filled '{Selector}'" + (" and submitted." if Submit else ".")
+
+            Page = _ActivePageForInteraction() or await _GetVisiblePage()
+            try:
+                if Url:
+                    await Page.goto(Url, wait_until="domcontentloaded", timeout=45000)
+                await Page.fill(Selector, Value, timeout=10000)
+                if Submit == True:
+                    await Page.press(Selector, "Enter")
+            except Exception as FillError:
+                return [TextContent(type="text", text=f"Error filling '{Selector}': {str(FillError)}")]
+
+            Text = f"Filled '{Selector}'" + (" and submitted." if Submit == True else ".")
             return [TextContent(type="text", text=_WithHint(Text, Name))]
 
         elif Name == "browse_evaluate":
@@ -272,13 +393,16 @@ async def call_tool(Name, Arguments):
             Url = Arguments.get("url", "").strip()
             if not Expression:
                 return [TextContent(type="text", text="Error: expression is required")]
-            Body = {"expression": Expression}
-            if Url:
-                Body["url"] = Url
-            Result = await asyncio.to_thread(_call, "/evaluate", Body)
-            if not Result.get("ok"):
-                return [TextContent(type="text", text=f"Error evaluating expression: {Result.get('error', 'Unknown error')}")]
-            Text = f"Result: {json.dumps(Result.get('result', ''), ensure_ascii=False)[:5000]}"
+
+            Page = _ActivePageForInteraction() or await _GetHeadlessPage()
+            try:
+                if Url:
+                    await Page.goto(Url, wait_until="domcontentloaded", timeout=45000)
+                Result = await Page.evaluate(Expression)
+            except Exception as EvalError:
+                return [TextContent(type="text", text=f"Error evaluating expression: {str(EvalError)}")]
+
+            Text = f"Result: {json.dumps(Result, ensure_ascii=False, default=str)[:5000]}"
             return [TextContent(type="text", text=_WithHint(Text, Name))]
 
         elif Name == "browse_search_memory":
@@ -317,22 +441,19 @@ async def call_tool(Name, Arguments):
             return [TextContent(type="text", text=f"Unknown tool: {Name}")]
 
     except Exception as e:
-        import traceback
         return [TextContent(type="text", text=f"Error in {Name}: {str(e)}")]
 
+
 async def _extract_media(Url):
-    Result = await asyncio.to_thread(_call, "/scrape", {
-        "url": Url,
-        "capture_as": "html",
-        "wait_ms": 2000
-    })
+    Page = await _GetHeadlessPage()
+    try:
+        if Page.url != Url:
+            await Page.goto(Url, wait_until="domcontentloaded", timeout=45000)
+        await Page.wait_for_timeout(2000)
+        Html = await Page.content()
+    except Exception as ScrapeError:
+        return [TextContent(type="text", text=f"Scrape failed: {str(ScrapeError)}")]
 
-    if not Result or not Result.get("ok"):
-        return [TextContent(type="text", text=f"Scrape failed: {Result.get('error') if Result else 'No response from Electron'}")]
-
-    Html = Result.get("content", "")
-
-    import re
     found = set()
 
     # All media file types including gif/apng/webp/images
@@ -388,9 +509,33 @@ async def _extract_media(Url):
     Text = f"Found {len(MediaList)} media items from {Url}:\n{json.dumps(MediaList, indent=2)}"
     return [TextContent(type="text", text=_WithHint(Text, "browse_extract_media"))]
 
+
+async def _Shutdown():
+    global _Playwright, _HeadlessBrowser, _VisibleBrowser
+    try:
+        if _HeadlessBrowser is not None:
+            await _HeadlessBrowser.close()
+    except Exception:
+        pass
+    try:
+        if _VisibleBrowser is not None:
+            await _VisibleBrowser.close()
+    except Exception:
+        pass
+    try:
+        if _Playwright is not None:
+            await _Playwright.stop()
+    except Exception:
+        pass
+
+
 async def main():
-    async with stdio_server() as (ReadStream, WriteStream):
-        await app.run(ReadStream, WriteStream, app.create_initialization_options())
+    try:
+        async with stdio_server() as (ReadStream, WriteStream):
+            await app.run(ReadStream, WriteStream, app.create_initialization_options())
+    finally:
+        await _Shutdown()
+
 
 if __name__ == "__main__":
     asyncio.run(main())
