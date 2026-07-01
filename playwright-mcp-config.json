@@ -1,0 +1,15 @@
+{
+    "browser": {
+        "browserName": "chromium",
+        "userDataDir": "ChromiumProfile",
+        "launchOptions": {
+            "headless": false
+            "args": [
+                "--enable-extensions",
+                "--disable-extensions-except=C:\\Users\\User\\AppData\\Local\\Google\\Chrome\\User Data\\Default\\Extensions\\aefkmifgmaafnojlojpnekbpbmjiiogg\\0.9.0_0",
+                "--load-extension=C:\\Users\\User\\AppData\\Local\\Google\\Chrome\\User Data\\Default\\Extensions\\aefkmifgmaafnojlojpnekbpbmjiiogg\\0.9.0_0"
+            ]
+        }
+    },
+    "capabilities": ["core", "tabs", "pdf", "history", "wait", "files", "install"]
+}
