@@ -38,6 +38,7 @@ powershell -ExecutionPolicy Bypass -File .\launch-windows.ps1
 ```
 ```bash
 npx playwright install chromium
+npx @playwright/mcp install-browser chromium
 ```
 
 Electron Setup
