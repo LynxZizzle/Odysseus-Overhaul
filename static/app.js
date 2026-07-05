@@ -678,8 +678,8 @@ function initializeEventListeners() {
     // Reset agent mode to Chat
     const modeToggle = el('agent-mode-toggle');
     if (modeToggle && modeToggle.checked) { modeToggle.checked = false; modeToggle.dispatchEvent(new Event('change')); }
-    // Clear character/persona
-    if (presetsModule && presetsModule.deactivateCharacter) presetsModule.deactivateCharacter();
+    // Persona intentionally survives fresh chats — it only clears via the X
+    // on the indicator pill / Cancel in the preset modal (or app restart).
   }
 
   /** Sync Research indicator button + overflow + tool sidebar active state. */
@@ -3012,8 +3012,7 @@ function initializeEventListeners() {
       if (!sessionModule) return;
       if (_closeCompareIfActive()) return;
       _deactivateIncognito();
-      // Clear character on new chat
-      if (presetsModule && presetsModule.deactivateCharacter) presetsModule.deactivateCharacter();
+      // Persona intentionally kept across new chats — cleared only via the X
       // Clear research mode if active
       const _resChk = el('research-toggle');
       if (_resChk && _resChk.checked) _syncResearchIndicator(false);
@@ -3059,7 +3058,7 @@ function initializeEventListeners() {
       if (!sessionModule) return;
       if (_closeCompareIfActive()) return;
       _deactivateIncognito();
-      if (presetsModule && presetsModule.deactivateCharacter) presetsModule.deactivateCharacter();
+      // Persona intentionally kept across new chats — cleared only via the X
       // Clear research toggle when starting a fresh chat (not via research button)
       _syncResearchIndicator(false);
       if (await _createDirectChatFromPreferredModel()) return;
