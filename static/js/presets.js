@@ -520,11 +520,17 @@ export async function loadPresets(showError) {
       }
     }
 
-    // Auto-activate custom preset if enabled and has content
-    if (custom && custom.enabled !== false && (custom.character_name || custom.system_prompt)) {
-      selectedPreset = 'custom';
+    // A persona/prompt is a per-run choice — it must never survive an app
+    // restart. presets.json may still say enabled:true from the previous run
+    // (older builds auto-reactivated here, and some deactivation paths never
+    // reached the backend), so heal that stale state on every startup:
+    // disable locally AND persist the disabled flag to the server.
+    if (custom && custom.enabled !== false && (custom.character_name || custom.system_prompt || custom.inject_prefix || custom.inject_suffix)) {
+      custom.enabled = false;
+      selectedPreset = null;
       const miniBtn = document.getElementById('overflow-preset-btn');
-      if (miniBtn) miniBtn.classList.add('active');
+      if (miniBtn) miniBtn.classList.remove('active');
+      _persistCustomEnabled(false);
     }
     setTimeout(() => { _syncCharIndicator(); }, 0);
   } catch (error) {
@@ -671,13 +677,10 @@ export function openCustomPresetModal() {
         try { if (window.groupModule && window.groupModule.stopGroup) window.groupModule.stopGroup(); } catch {}
         if (window._syncGroupIndicator) window._syncGroupIndicator(false);
       } else {
+        // deactivateCharacter persists enabled:false to the backend itself —
+        // the old duplicate raw fetch here spread unclamped values (e.g.
+        // max_tokens > 8192) that the server 422'd silently.
         deactivateCharacter();
-        try {
-          fetch(`${API_BASE}/api/presets/custom`, {
-            method: 'POST', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ ...(presets.custom || {}), name: (presets.custom && presets.custom.character_name) || '', enabled: false }),
-          }).catch(() => {});
-        } catch {}
       }
       const m = document.getElementById('custom-preset-modal');
       if (m) m.classList.add('hidden');
@@ -951,7 +954,44 @@ export function getInject() {
 }
 
 /**
- * Fully deactivate the character — clear preset, hide indicator, update overflow btn.
+ * Persist the custom preset's enabled flag to the backend.
+ * Values are clamped to PresetUpdateRequest's limits (temperature 0-2,
+ * max_tokens 0-8192) — an out-of-range value from an old presets.json or a
+ * template (templates allow up to 65536 tokens) makes the POST 422 and the
+ * flag silently never lands, which is exactly the "persona comes back after
+ * restart no matter what" failure.
+ */
+function _persistCustomEnabled(enabled) {
+  const custom = presets.custom || {};
+  const _rawTemp = parseFloat(custom.temperature);
+  const _rawTokens = parseInt(custom.max_tokens);
+  const body = {
+    name: custom.character_name || '',
+    enabled: enabled,
+    temperature: isNaN(_rawTemp) ? 1.0 : Math.max(0, Math.min(2, _rawTemp)),
+    max_tokens: (isNaN(_rawTokens) || _rawTokens < 0 || _rawTokens > 8192) ? 0 : _rawTokens,
+    system_prompt: custom.system_prompt || '',
+    inject_prefix: custom.inject_prefix || '',
+    inject_suffix: custom.inject_suffix || '',
+  };
+  return fetch(`${API_BASE}/api/presets/custom`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  }).then((res) => {
+    if (!res.ok) console.error(`Failed to persist preset enabled=${enabled}: server returned ${res.status}`);
+  }).catch((e) => {
+    console.error(`Failed to persist preset enabled=${enabled}:`, e);
+  });
+}
+
+/**
+ * Fully deactivate the character — clear preset, hide indicator, update
+ * overflow btn, and persist the disabled state to the backend. Every
+ * deactivation path (X on the indicator, Cancel in the modal, New Chat,
+ * brand click, Research toggle) funnels through here — previously only the
+ * X/Cancel paths saved to the server, so deactivating via New Chat left
+ * presets.json enabled and the persona resurrected itself on restart.
  */
 export function deactivateCharacter() {
   selectedPreset = null;
@@ -960,6 +1000,7 @@ export function deactivateCharacter() {
   if (charInd) { charInd.style.display = 'none'; charInd.classList.remove('active'); }
   const miniBtn = document.getElementById('overflow-preset-btn');
   if (miniBtn) miniBtn.classList.remove('active');
+  _persistCustomEnabled(false);
 }
 
 /**
@@ -1034,21 +1075,11 @@ function _syncCharIndicator() {
     if (!btn._wired) {
       btn._wired = true;
       btn.addEventListener('click', (e) => {
-        // If clicking the X, deactivate character
+        // If clicking the X, deactivate character (deactivateCharacter also
+        // persists enabled:false to the backend with clamped values)
         if (e.target.closest('.tool-indicator-x')) {
           if (window._persistentChatSession) return; // locked in persistent chat
-          selectedPreset = null;
-          presets.custom = { ...presets.custom, enabled: false };
-          btn.style.display = 'none';
-          btn.classList.remove('active');
-          const miniBtn = document.getElementById('overflow-preset-btn');
-          if (miniBtn) miniBtn.classList.remove('active');
-          // Save disabled state to backend
-          fetch(`${API_BASE}/api/presets/custom`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ ...presets.custom, name: presets.custom.character_name || '', enabled: false }),
-          }).catch(() => {});
+          deactivateCharacter();
           return;
         }
         if (typeof openCustomPresetModal === 'function') openCustomPresetModal();
