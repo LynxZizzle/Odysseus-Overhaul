@@ -768,14 +768,14 @@ FUNCTION_TOOL_SCHEMAS = [
         "type": "function",
         "function": {
             "name": "manage_settings",
-            "description": "Manage user preferences and settings. Use `disable_tool`/`enable_tool`/`list_tools` to turn individual tools on or off globally (e.g. shell, search, browser, documents, memory, skills, images, tasks, notes, calendar, email). Use list/get/set/delete for free-form preferences.",
+            "description": "Manage user preferences and settings. Use `disable_tool`/`enable_tool`/`list_tools` to turn individual tools on or off globally (e.g. shell, search, browser, documents, memory, skills, images, tasks, notes, calendar, email), or to grant/revoke read vs write access separately for memory and skills (aliases: 'read memory', 'write memory', 'read skills', 'write skills'). Use list/get/set/delete for free-form preferences.",
             "parameters": {
                 "type": "object",
                 "properties": {
                     "action": {"type": "string", "enum": ["list", "get", "set", "delete", "disable_tool", "enable_tool", "list_tools"]},
                     "key": {"type": "string", "description": "Setting key (for get/set/delete)"},
                     "value": {"description": "Setting value (for set) — can be string, number, boolean, or object"},
-                    "tool": {"type": "string", "description": "Tool name to disable/enable (for disable_tool/enable_tool). Accepts aliases: shell, search, browser, documents, memory, skills, images, tasks, notes, calendar, email — or a raw tool name like 'bash' or 'web_search'."}
+                    "tool": {"type": "string", "description": "Tool name to disable/enable (for disable_tool/enable_tool). Accepts aliases: shell, search, browser, documents, memory, skills, images, tasks, notes, calendar, email — or a raw tool name like 'bash' or 'web_search'. Also accepts granular permission aliases: 'read memory', 'write memory', 'read skills', 'write skills' to allow/revoke reading or writing memory/skills independently of the whole tool."}
                 },
                 "required": ["action"]
             }

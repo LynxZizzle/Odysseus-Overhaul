@@ -2416,27 +2416,53 @@ def setup_model_routes(model_discovery):
 
     # ── Tool management ──
 
+    # Keys the Agent Tools panel is allowed to read/write via the
+    # permissions payload below. Kept as an explicit allowlist so a
+    # malformed/forged request body can't flip arbitrary settings.
+    _TOOL_PERMISSION_KEYS = (
+        "memory_read_enabled", "memory_write_enabled",
+        "skills_read_enabled", "skills_write_enabled",
+    )
+
     @router.get("/tools")
     def list_tools():
-        """List all available tools with their enabled/disabled status."""
+        """List all available tools with their enabled/disabled status.
+
+        Also returns `permissions`: the granular read/write toggles for
+        memory and skills (independent of the whole-tool enabled/disabled
+        state above — a tool can be enabled but writes still turned off).
+        """
         from src.agent_tools import TOOL_TAGS
         settings = _load_settings()
         disabled = set(settings.get("disabled_tools", []))
         tools = []
         for tag in sorted(TOOL_TAGS):
             tools.append({"id": tag, "enabled": tag not in disabled})
-        return {"tools": tools}
+        permissions = {k: settings.get(k, True) for k in _TOOL_PERMISSION_KEYS}
+        return {"tools": tools, "permissions": permissions}
 
     class ToolsUpdate(BaseModel):
-        disabled: list = []
+        disabled: Optional[List[str]] = None
+        permissions: Optional[Dict[str, bool]] = None
 
     @router.post("/tools")
     def update_tools(body: ToolsUpdate, request: Request):
-        """Update which tools are disabled."""
+        """Update which tools are disabled, and/or memory/skills read-write permissions.
+
+        Either field may be omitted: a permissions-only call (from the
+        Built-in MCP Tools panel, which doesn't track the full disabled-tools
+        list) won't clobber `disabled_tools`, and vice versa.
+        """
         require_admin(request)
         settings = _load_settings()
-        settings["disabled_tools"] = body.disabled
+        if body.disabled is not None:
+            settings["disabled_tools"] = body.disabled
+        if body.permissions:
+            for key, value in body.permissions.items():
+                if key in _TOOL_PERMISSION_KEYS:
+                    settings[key] = bool(value)
         _save_settings(settings)
-        return {"ok": True, "disabled": body.disabled}
+        permissions = {k: settings.get(k, True) for k in _TOOL_PERMISSION_KEYS}
+        return {"ok": True, "disabled": settings.get("disabled_tools", []), "permissions": permissions}
 
     return router

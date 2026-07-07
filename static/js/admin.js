@@ -1859,6 +1859,62 @@ const TOOL_META = {
   manage_settings:   { name: 'Settings',         desc: 'Change app settings',             cat: 'System',     ctx: '~100' },
 };
 
+// Tool ids that have a granular read/write permission pair (independent of
+// the whole-tool enabled/disabled switch above). Rendered as two extra
+// sub-rows nested under the tool's row in the Agent Tools panel and in the
+// Built-in MCP Tools panel.
+const TOOL_PERMISSION_PAIRS = {
+  manage_memory: { read: 'memory_read_enabled', write: 'memory_write_enabled' },
+  manage_skills: { read: 'skills_read_enabled', write: 'skills_write_enabled' },
+};
+
+function _renderPermissionSubRows(toolId, perms) {
+  const pair = TOOL_PERMISSION_PAIRS[toolId];
+  if (!pair) return '';
+  const readOn = perms ? perms[pair.read] !== false : true;
+  const writeOn = perms ? perms[pair.write] !== false : true;
+  return `
+    <div class="admin-tool-row" style="padding-left:22px;opacity:0.85;">
+      <div class="admin-tool-info">
+        <span class="admin-tool-name" style="font-size:0.85em;">Read</span>
+        <span class="admin-tool-desc">List and search — no changes</span>
+      </div>
+      <label class="admin-switch" style="flex-shrink:0;">
+        <input type="checkbox" data-perm-key="${esc(pair.read)}" ${readOn ? 'checked' : ''}>
+        <span class="admin-slider"></span>
+      </label>
+    </div>
+    <div class="admin-tool-row" style="padding-left:22px;opacity:0.85;">
+      <div class="admin-tool-info">
+        <span class="admin-tool-name" style="font-size:0.85em;">Write</span>
+        <span class="admin-tool-desc">Add, edit, or delete entries</span>
+      </div>
+      <label class="admin-switch" style="flex-shrink:0;">
+        <input type="checkbox" data-perm-key="${esc(pair.write)}" ${writeOn ? 'checked' : ''}>
+        <span class="admin-slider"></span>
+      </label>
+    </div>`;
+}
+
+async function _savePermission(key, value) {
+  try {
+    await fetch('/api/tools', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ permissions: { [key]: value } }),
+      credentials: 'same-origin',
+    });
+  } catch (e) { console.warn('[tool-permission] save failed:', e); }
+}
+
+function _wirePermissionToggles(root) {
+  root.querySelectorAll('input[data-perm-key]').forEach(chk => {
+    chk.addEventListener('change', () => {
+      _savePermission(chk.dataset.permKey, chk.checked);
+    });
+  });
+}
+
 async function loadBuiltinTools() {
   const list = el('adm-builtin-tools-list');
   if (!list) return;
@@ -1866,6 +1922,7 @@ async function loadBuiltinTools() {
     const res = await fetch('/api/tools', { credentials: 'same-origin' });
     const data = await res.json();
     const tools = data.tools || [];
+    const perms = data.permissions || {};
     if (!tools.length) { list.innerHTML = '<div class="admin-empty">No tools found</div>'; return; }
 
     // Group by category
@@ -1913,10 +1970,14 @@ async function loadBuiltinTools() {
             <span class="admin-slider"></span>
           </label>
         </div>`;
+        html += _renderPermissionSubRows(t.id, perms);
       }
       html += '</div></div>';
     }
     list.innerHTML = html;
+
+    // Wire the new Read/Write permission sub-toggles (Memory, Skills)
+    _wirePermissionToggles(list);
 
     // Prevent toggle clicks from expanding/collapsing
     list.querySelectorAll('.admin-tool-cat-right').forEach(span => {
@@ -3323,12 +3384,21 @@ async function _loadBuiltinMcpTools(isRetry) {
   document.querySelectorAll('#adm-builtin-mcp-card').forEach(function(el){el.remove();});
 
   var data;
+  var mcpPerms = {};
   try {
     var res = await fetch('/api/mcp/builtin-tools', { credentials: 'same-origin' });
     if (!res.ok) return;
     data = await res.json();
   } catch (e) { return; }
   if (!Array.isArray(data) || !data.length) return;
+
+  try {
+    var permRes = await fetch('/api/tools', { credentials: 'same-origin' });
+    if (permRes.ok) {
+      var permData = await permRes.json();
+      mcpPerms = permData.permissions || {};
+    }
+  } catch (e) { /* non-fatal: sub-rows just default to "on" */ }
 
   var byServer = {};
   data.forEach(function(t) {
@@ -3428,8 +3498,17 @@ async function _loadBuiltinMcpTools(isRetry) {
             + (!t.is_disabled ? 'checked' : '') + '>'
           + '<span class="admin-slider"></span></label>';
       bodyEl.appendChild(row);
+      if (typeof _renderPermissionSubRows === 'function') {
+        var subHtml = _renderPermissionSubRows(t.name, mcpPerms);
+        if (subHtml) {
+          var subWrap = document.createElement('div');
+          subWrap.innerHTML = subHtml;
+          while (subWrap.firstChild) { bodyEl.appendChild(subWrap.firstChild); }
+        }
+      }
     });
     catEl.appendChild(bodyEl);
+    if (typeof _wirePermissionToggles === 'function') _wirePermissionToggles(bodyEl);
 
     headerEl.querySelector('.admin-tool-cat-right').addEventListener('click', function(e) {
       e.stopPropagation();

@@ -29,6 +29,16 @@ def _invalidate_caches():
 # ── Default values ──
 
 DEFAULT_SETTINGS = {
+    # Granular agent permissions for the memory and skills tools. These sit
+    # alongside (not instead of) the whole-tool disabled_tools toggle: even
+    # with manage_memory/manage_skills enabled as tools, these flags let the
+    # user allow reading without allowing writing (or vice versa). Checked at
+    # call time in do_manage_memory / do_manage_skills. Default ON so
+    # existing behavior is unchanged until the user toggles one off.
+    "memory_read_enabled": True,
+    "memory_write_enabled": True,
+    "skills_read_enabled": True,
+    "skills_write_enabled": True,
     # Agent email safety: when True, the MCP send_email / reply_to_email
     # tools don't SMTP directly. They stage the composed message into the
     # scheduled_emails table with status='agent_draft' and return a

@@ -293,6 +293,14 @@ async def do_pipeline(content: str, session_id: Optional[str] = None, owner: Opt
 # Memory management tool
 # ---------------------------------------------------------------------------
 
+# Actions classified as read vs write, so the memory_read_enabled /
+# memory_write_enabled toggles (see src/settings.py DEFAULT_SETTINGS) can be
+# checked independently. Unlike the whole-tool disabled_tools toggle, these
+# let the user allow reading memory without allowing writes, or vice versa.
+_MEMORY_READ_ACTIONS = ("list", "search")
+_MEMORY_WRITE_ACTIONS = ("add", "edit", "delete")
+
+
 async def do_manage_memory(content: str, session_id: Optional[str] = None, owner: Optional[str] = None) -> Dict:
     """Manage memories: list, add, edit, delete, search.
 
@@ -306,6 +314,8 @@ async def do_manage_memory(content: str, session_id: Optional[str] = None, owner
       edit                    — line 2: memory_id, line 3: new text
       delete                  — line 2: memory_id
       search                  — line 2: query
+
+    Gated by the memory_read_enabled / memory_write_enabled settings toggles.
     """
     if not _memory_manager:
         return {"error": "Memory manager not available"}
@@ -315,6 +325,21 @@ async def do_manage_memory(content: str, session_id: Optional[str] = None, owner
         return {"error": "Need at least 1 line: action"}
 
     action = lines[0].strip().lower()
+
+    if action in _MEMORY_READ_ACTIONS:
+        from src.settings import get_setting
+        if get_setting("memory_read_enabled", True) != True:
+            return {
+                "error": "Reading memory is currently disabled. Ask the user to enable it (manage_settings enable_tool 'read memory').",
+                "exit_code": 1,
+            }
+    elif action in _MEMORY_WRITE_ACTIONS:
+        from src.settings import get_setting
+        if get_setting("memory_write_enabled", True) != True:
+            return {
+                "error": "Writing to memory is currently disabled. Ask the user to enable it (manage_settings enable_tool 'write memory').",
+                "exit_code": 1,
+            }
 
     if action == "list":
         category_filter = lines[1].strip().lower() if len(lines) > 1 and lines[1].strip() else None

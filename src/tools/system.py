@@ -21,6 +21,13 @@ logger = logging.getLogger(__name__)
 # Skills management tool
 # ---------------------------------------------------------------------------
 
+# Actions classified as read vs write, so the skills_read_enabled /
+# skills_write_enabled toggles (see src/settings.py DEFAULT_SETTINGS) can be
+# checked independently of the whole-tool disabled_tools toggle.
+_SKILLS_READ_ACTIONS = ("list", "index", "", "view", "view_ref", "search")
+_SKILLS_WRITE_ACTIONS = ("add", "edit", "patch", "publish", "delete")
+
+
 async def do_manage_skills(content: str, owner: Optional[str] = None) -> Dict:
     """Handle manage_skills tool calls.
 
@@ -40,6 +47,8 @@ async def do_manage_skills(content: str, owner: Optional[str] = None) -> Dict:
       publish {name}             — Flip status: draft -> published.
       delete {name}              — Remove the skill directory.
       search {query}             — Relevance match on published skills.
+
+    Gated by the skills_read_enabled / skills_write_enabled settings toggles.
     """
     try:
         args = _parse_tool_args(content)
@@ -47,6 +56,22 @@ async def do_manage_skills(content: str, owner: Optional[str] = None) -> Dict:
         return {"error": "Invalid JSON arguments", "exit_code": 1}
 
     action = (args.get("action") or "").lower()
+
+    if action in _SKILLS_READ_ACTIONS:
+        from src.settings import get_setting
+        if get_setting("skills_read_enabled", True) != True:
+            return {
+                "error": "Reading skills is currently disabled. Ask the user to enable it (manage_settings enable_tool 'read skills').",
+                "exit_code": 1,
+            }
+    elif action in _SKILLS_WRITE_ACTIONS:
+        from src.settings import get_setting
+        if get_setting("skills_write_enabled", True) != True:
+            return {
+                "error": "Writing skills is currently disabled. Ask the user to enable it (manage_settings enable_tool 'write skills').",
+                "exit_code": 1,
+            }
+
     from services.memory.skills import SkillsManager
     from services.memory.skill_format import Skill, slugify
     from src.constants import DATA_DIR

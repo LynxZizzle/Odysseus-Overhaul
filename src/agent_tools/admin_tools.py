@@ -710,21 +710,68 @@ async def do_manage_settings(content: str, owner: Optional[str] = None) -> Dict:
                 "research": ["web_search", "web_fetch"],  # research is a per-request flag, not a tool (closest analog)
             }
 
+            # Granular read/write toggles for memory and skills. These are
+            # boolean settings (checked at call time in do_manage_memory /
+            # do_manage_skills), not entries in disabled_tools, since both
+            # read and write actions live behind the same tool name
+            # (manage_memory / manage_skills). This lets the user allow
+            # reading without allowing writes, or vice versa, instead of
+            # only being able to toggle the whole tool on/off.
+            _PERMISSION_ALIASES = {
+                "read memory": "memory_read_enabled",
+                "memory read": "memory_read_enabled",
+                "read_memory": "memory_read_enabled",
+                "write memory": "memory_write_enabled",
+                "memory write": "memory_write_enabled",
+                "write_memory": "memory_write_enabled",
+                "read skills": "skills_read_enabled",
+                "skills read": "skills_read_enabled",
+                "read_skills": "skills_read_enabled",
+                "write skills": "skills_write_enabled",
+                "skills write": "skills_write_enabled",
+                "write_skills": "skills_write_enabled",
+            }
+
             if action == "list_tools":
                 current = get_setting("disabled_tools", []) or []
+                perm_lines = []
+                for flag_key in ("memory_read_enabled", "memory_write_enabled", "skills_read_enabled", "skills_write_enabled"):
+                    state = "on" if get_setting(flag_key, True) else "off"
+                    perm_lines.append(f"{flag_key}: {state}")
                 return {
                     "response": (
                         f"Currently disabled: {', '.join(current) if current else '(none)'}.\n"
                         "Common toggles: shell (bash), search (web_search), browser, documents, "
-                        "memory, skills, images, tasks, notes, calendar, email."
+                        "memory, skills, images, tasks, notes, calendar, email.\n"
+                        "Granular memory/skills permissions: read memory, write memory, "
+                        "read skills, write skills.\n"
+                        f"Current permission state: {', '.join(perm_lines)}."
                     ),
                     "disabled": list(current),
+                    "permissions": {k: get_setting(k, True) for k in (
+                        "memory_read_enabled", "memory_write_enabled",
+                        "skills_read_enabled", "skills_write_enabled",
+                    )},
                     "exit_code": 0,
                 }
 
             tool_name = (args.get("tool") or args.get("name") or "").strip().lower()
             if not tool_name:
-                return {"error": "tool name required (e.g. 'shell', 'search', 'bash')", "exit_code": 1}
+                return {"error": "tool name required (e.g. 'shell', 'search', 'bash', 'read memory', 'write skills')", "exit_code": 1}
+
+            if tool_name in _PERMISSION_ALIASES:
+                flag_key = _PERMISSION_ALIASES[tool_name]
+                settings = load_settings()
+                settings[flag_key] = (action == "enable_tool")
+                save_settings(settings)
+                verb = "Enabled" if action == "enable_tool" else "Disabled"
+                return {
+                    "response": f"{verb} '{tool_name}' ({flag_key} = {settings[flag_key]}).",
+                    "changed": [flag_key],
+                    "permissions": {flag_key: settings[flag_key]},
+                    "exit_code": 0,
+                }
+
             targets = _ALIASES.get(tool_name, [tool_name])
 
             settings = load_settings()
