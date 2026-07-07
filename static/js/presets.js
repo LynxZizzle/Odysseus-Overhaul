@@ -744,7 +744,14 @@ export function openCustomPresetModal() {
 }
 
 /**
- * Save custom preset
+ * Save custom preset.
+ *
+ * Activation is local and immediate — it no longer waits on, or gets undone
+ * by, the backend save. The POST to /api/presets/custom still happens, but
+ * purely to persist the preset for next time; if it fails (network hiccup,
+ * server-side validation, permissions, whatever), the persona stays active
+ * for the current session and a warning is logged instead of surfaced as a
+ * blocking error.
  */
 export async function saveCustomPreset(showToast, showError) {
   const nameInput = document.getElementById('custom-character-name');
@@ -793,109 +800,106 @@ export async function saveCustomPreset(showToast, showError) {
     inject_suffix: _suffixInput ? _suffixInput.value : '',
   };
 
-  try {
-    presets.custom = { ...presets.custom, ...config, character_name: name, enabled: enabled };
-    
-    const response = await fetch(`${API_BASE}/api/presets/custom`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(config)
-    });
+  // Activate the persona locally right away — the backend save (further
+  // below) is fired in the background and no longer gates any of this.
+  presets.custom = { ...presets.custom, ...config, character_name: name, enabled: enabled };
 
-    const result = await response.json();
-    if (result.success) {
-      // The custom preset must be the SELECTED preset for its values to reach
-      // the model — chat.js only sends `preset_id` when getSelectedPreset() is
-      // truthy. Activate it when there's a persona (name/prompt) OR when the
-      // user has dialed in non-default tuning (temperature / max tokens) — the
-      // "Inject" tab's plain-chat case. Without the tuning check, "just set
-      // temp + max tokens" would silently do nothing.
-      const _hasTuning = (config.temperature !== 1.0) || (config.max_tokens !== 0);
-      const _hasInject = !!(config.inject_prefix || config.inject_suffix);
-      const _hasContent = !!(system_prompt || name || _hasTuning || _hasInject);
-      if (enabled && _hasContent) {
-        selectedPreset = 'custom';
-        // Turn off research — doesn't make sense with a character
-        if (window._syncResearchIndicator) window._syncResearchIndicator(false);
-      } else {
-        selectedPreset = null;
-      }
-
-      // Update mini button state
-      const miniBtn = document.getElementById('overflow-preset-btn');
-      if (miniBtn) {
-        miniBtn.classList.toggle('active', enabled && _hasContent);
-      }
-
-      setTimeout(() => { _syncCharIndicator(); }, 0);
-
-      // Auto-save to templates (non-blocking) — skip built-in presets
-      const _selVal = document.getElementById('char-template-select')?.value || '';
-      const isBuiltinPreset = PROMPT_TEMPLATES.some(t => t.isPreset && (t.name === name || t.name === _selVal));
-      const saveName = isBuiltinPreset ? null : (name || null);
-
-      if (saveName) {
-        const _existing = userTemplates.find(t => t.name === saveName);
-        let clone;
-        const _entry = {
-          id: _existing && _existing.id
-            || 'user-' + Math.random().toString(16).slice(2, 10),
-          name: saveName,
-          // use ?? since it's more semantic for null-coalescing
-          system_prompt: system_prompt ?? '',
-          temperature: config.temperature,
-          max_tokens: config.max_tokens,
-        }
-        const ENDPOINT = `${API_BASE}/api/presets/templates`;
-
-        // Optimistically update the in-memory templates list by @michaelxer
-        if (_existing) {
-          // slow but works for now
-          clone = JSON.parse(JSON.stringify(_existing));
-
-          Object.assign(_existing, _entry);
-        } else {
-          userTemplates.push(_entry);
-        }
-
-        fetch(ENDPOINT, {
-          method: "POST",
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(_entry)
-        }).then((r) => {
-          if (r.ok) {
-            loadUserTemplates();
-          }
-        }).catch(() => {
-          if (clone) {
-            Object.assign(_existing, clone);
-          }
-
-          if (showError) {
-            showError(_isInjectStart ? "Something went wrong. Saved prompt has been undone." : "Something went wrong. Saved persona has been undone.");
-          }
-        });
-      }
-
-      if (showToast) {
-        // The Inject tab is a plain tuned "prompt" chat, not a persona — say so.
-        showToast(_isInjectStart ? 'Prompt saved' : 'Persona saved');
-      }
-      const modal = document.getElementById('custom-preset-modal');
-      if (modal) {
-        modal.classList.add('hidden');
-      }
-    } else {
-      if (showError) {
-        showError('Failed to save custom preset');
-      }
-    }
-  } catch (error) {
-    console.error('Error saving custom preset:', error);
-    if (showError) {
-      showError('Failed to save custom preset');
-    }
+  // The custom preset must be the SELECTED preset for its values to reach
+  // the model — chat.js only sends `preset_id` when getSelectedPreset() is
+  // truthy. Activate it when there's a persona (name/prompt) OR when the
+  // user has dialed in non-default tuning (temperature / max tokens) — the
+  // "Inject" tab's plain-chat case. Without the tuning check, "just set
+  // temp + max tokens" would silently do nothing.
+  const _hasTuning = (config.temperature !== 1.0) || (config.max_tokens !== 0);
+  const _hasInject = !!(config.inject_prefix || config.inject_suffix);
+  const _hasContent = !!(system_prompt || name || _hasTuning || _hasInject);
+  if (enabled && _hasContent) {
+    selectedPreset = 'custom';
+    // Turn off research — doesn't make sense with a character
+    if (window._syncResearchIndicator) window._syncResearchIndicator(false);
+  } else {
+    selectedPreset = null;
   }
+
+  // Update mini button state
+  const miniBtn = document.getElementById('overflow-preset-btn');
+  if (miniBtn) {
+    miniBtn.classList.toggle('active', enabled && _hasContent);
+  }
+
+  setTimeout(() => { _syncCharIndicator(); }, 0);
+
+  // Auto-save to templates (non-blocking) — skip built-in presets
+  const _selVal = document.getElementById('char-template-select')?.value || '';
+  const isBuiltinPreset = PROMPT_TEMPLATES.some(t => t.isPreset && (t.name === name || t.name === _selVal));
+  const saveName = isBuiltinPreset ? null : (name || null);
+
+  if (saveName) {
+    const _existing = userTemplates.find(t => t.name === saveName);
+    let clone;
+    const _entry = {
+      id: _existing && _existing.id
+        || 'user-' + Math.random().toString(16).slice(2, 10),
+      name: saveName,
+      // use ?? since it's more semantic for null-coalescing
+      system_prompt: system_prompt ?? '',
+      temperature: config.temperature,
+      max_tokens: config.max_tokens,
+    };
+    const ENDPOINT = `${API_BASE}/api/presets/templates`;
+
+    // Optimistically update the in-memory templates list by @michaelxer
+    if (_existing) {
+      // slow but works for now
+      clone = JSON.parse(JSON.stringify(_existing));
+
+      Object.assign(_existing, _entry);
+    } else {
+      userTemplates.push(_entry);
+    }
+
+    fetch(ENDPOINT, {
+      method: "POST",
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(_entry)
+    }).then((r) => {
+      if (r.ok) {
+        loadUserTemplates();
+      }
+    }).catch(() => {
+      if (clone) {
+        Object.assign(_existing, clone);
+      }
+
+      if (showError) {
+        showError(_isInjectStart ? "Something went wrong. Saved prompt has been undone." : "Something went wrong. Saved persona has been undone.");
+      }
+    });
+  }
+
+  if (showToast) {
+    showToast(_isInjectStart ? 'Prompt active' : 'Persona active');
+  }
+  const modal = document.getElementById('custom-preset-modal');
+  if (modal) {
+    modal.classList.add('hidden');
+  }
+
+  // Fire the custom-preset save in the background. Failure no longer blocks
+  // activation or the toast/modal-close above — it just means the persona
+  // won't persist past this session.
+  fetch(`${API_BASE}/api/presets/custom`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(config)
+  }).then(async (response) => {
+    const result = await response.json().catch(() => ({}));
+    if (!result.success) {
+      console.warn('Persona is active but did not persist to the backend:', result);
+    }
+  }).catch((error) => {
+    console.warn('Persona is active but did not persist to the backend:', error);
+  });
 }
 
 /**
