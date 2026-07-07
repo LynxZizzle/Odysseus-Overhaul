@@ -794,6 +794,8 @@ export async function saveCustomPreset(showToast, showError) {
   };
 
   try {
+    presets.custom = { ...presets.custom, ...config, character_name: name, enabled: enabled };
+    
     const response = await fetch(`${API_BASE}/api/presets/custom`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -802,8 +804,6 @@ export async function saveCustomPreset(showToast, showError) {
 
     const result = await response.json();
     if (result.success) {
-      presets.custom = { ...presets.custom, ...config, character_name: name, enabled: enabled };
-
       // The custom preset must be the SELECTED preset for its values to reach
       // the model — chat.js only sends `preset_id` when getSelectedPreset() is
       // truthy. Activate it when there's a persona (name/prompt) OR when the
